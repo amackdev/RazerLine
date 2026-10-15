@@ -1,14 +1,13 @@
 //! Device profile for the Razer Basilisk V3 (wired).
 //!
-//! Confidence: the command classes/ids/argument layouts below were
-//! cross-checked line-by-line against the OpenRazer kernel driver source
-//! (`driver/razermouse_driver.c` and `razerchromacommon.c`, GPL-3.0),
-//! which explicitly lists `USB_DEVICE_ID_RAZER_BASILISK_V3` for each of
-//! these code paths — this isn't "standard mouse bytes applied on spec,"
-//! it's the exact bytes OpenRazer's Linux driver sends to this model.
-//! Still marked `Unverified` here because no maintainer of *this* repo
-//! has run it against real hardware yet. If you have, please say so (and
-//! what did/didn't work) in an issue — see `docs/PROTOCOL.md`.
+//! Confirmed against real hardware: DPI get/set, polling rate, and the
+//! Static/Spectrum/Wave LED effects plus brightness on both the scroll
+//! wheel and logo zones. Also confirmed on real hardware: Breathing and
+//! Off genuinely get rejected by the firmware (`STATUS_NOT_SUPPORTED`/
+//! `STATUS_FAILURE`) — not a bug here, OpenRazer's own driver doesn't
+//! attempt them for this exact PID either. The third LED (bottom/
+//! underglow) is deliberately not listed as a zone — see the comment
+//! below and `docs/PROTOCOL.md`.
 
 use super::{
     Confidence, DeviceKind, DeviceProfile, DpiProfile, IdentityProfile, LedZoneProfile,
@@ -24,7 +23,7 @@ pub const BASILISK_V3: DeviceProfile = DeviceProfile {
     // Razer has shipped more than one PID for variants of this mouse.
     product_id: 0x0099,
     kind: DeviceKind::Mouse,
-    confidence: Confidence::Unverified,
+    confidence: Confidence::Verified,
     dpi: Some(DpiProfile {
         command_class: CommandClass::Mouse as u8,
         set_command_id: MouseCommand::SetDpiXY as u8,
@@ -56,18 +55,20 @@ pub const BASILISK_V3: DeviceProfile = DeviceProfile {
             effect_command_id: LedCommand::SetEffect as u8,
             brightness_command_id: Some(LedCommand::SetBrightness as u8),
         },
-        // The third zone: this mouse's bottom/underglow strip, which
-        // OpenRazer (and this protocol generally) calls "Backlight"
-        // (BACKLIGHT_LED = 0x05 in razercommon.h) — it's the same zone id
-        // the static-effect example in docs/PROTOCOL.md and the
-        // regression test in protocol.rs are built from.
-        LedZoneProfile {
-            id: CommonLedId::Backlight as u8,
-            name: "Underglow",
-            command_class: CommandClass::Led as u8,
-            effect_command_id: LedCommand::SetEffect as u8,
-            brightness_command_id: Some(LedCommand::SetBrightness as u8),
-        },
+        // This mouse actually has a third LED (bottom/underglow), but it
+        // is deliberately NOT listed here — real hardware rejects the
+        // simple single-zone effect command (class 0x0F id 0x02) for it
+        // with STATUS_FAILURE, confirmed against a real Basilisk V3.
+        // OpenRazer's own driver never attempts this either: none of its
+        // `USB_DEVICE_ID_RAZER_BASILISK_V3` probe-time cases fall inside
+        // the block that creates `backlight_matrix_effect_*` sysfs files,
+        // for any PID. The underglow is most likely only addressable
+        // through the separate per-pixel "custom frame" matrix command
+        // (class 0x0F id 0x08, `razer_chroma_extended_matrix_set_custom_frame2`
+        // in OpenRazer) rather than a single-zone color — the same
+        // category of not-yet-implemented work as keyboard per-key RGB.
+        // Don't add a "Backlight"/"Underglow" zone back here without
+        // confirming the correct mechanism against real traffic first.
     ],
     identity: Some(IdentityProfile {
         command_class: CommandClass::General as u8,

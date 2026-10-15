@@ -95,12 +95,15 @@ pub fn effect_preview(ui: &mut Ui, kind: PreviewKind, rgb: [u8; 3], time: f64) {
             ui.ctx().request_repaint();
         }
         PreviewKind::Wave => {
+            // The device's Wave effect takes no color argument at all —
+            // it's always a traveling rainbow band, same as Synapse's
+            // own Wave effect. Preview it that way rather than blending
+            // the picked color, which would be actively misleading.
             const STEPS: i32 = 28;
             let w = rect.width() / STEPS as f32;
             for i in 0..STEPS {
-                let phase = ((time * 2.2) as f32 + i as f32 * 0.35).sin();
-                let t = (phase + 1.0) / 2.0;
-                let c = lerp_color(off, color, t);
+                let hue = ((time * 90.0) as f32 + i as f32 * 10.0) % 360.0;
+                let c = hsv_to_rgb(hue, 0.85, 0.95);
                 let r = egui::Rect::from_min_size(
                     rect.min + egui::vec2(i as f32 * w, 0.0),
                     egui::vec2(w + 1.0, rect.height()),

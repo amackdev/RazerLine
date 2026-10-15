@@ -355,6 +355,12 @@ impl GuiApp {
                     self.apply(r, "LED off");
                 }
             });
+            ui.add_space(4.0);
+            ui.label(
+                egui::RichText::new("Spectrum and Wave always cycle through colors — the picker above only applies to Static and Breathing.")
+                    .small()
+                    .color(theme::MUTED),
+            );
 
             if zone.brightness_command_id.is_some() {
                 ui.add_space(10.0);
