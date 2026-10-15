@@ -5,7 +5,11 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "Byte-level Razer HID control-report protocol framing and command vocabulary"
+description = "Byte-level Razer HID control-report framing, loaded as a DLL by razer-hid-core"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+razer-hid-abi = { path = "../abi" }
 thiserror.workspace = true

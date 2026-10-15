@@ -1,22 +1,20 @@
-//! Unofficial, open-source control library for Razer HID peripherals.
+//! Unofficial, open-source control engine for Razer HID peripherals.
 //!
 //! Not affiliated with or endorsed by Razer Inc. Built from the public
 //! Razer Chroma HID protocol reverse-engineered by the OpenRazer community.
 //!
-//! This crate is the generic control engine: [`device::RazerDevice`] and
-//! the [`profile::DeviceProfile`] shape it's driven by. It depends on
-//! `razer-hid-protocol` for byte-level framing/command vocabulary, but
-//! deliberately knows nothing about any *specific* device — the catalog
-//! of concrete profiles (one per supported model) lives in the separate
-//! `razer-hid-devices` crate, which depends on this one. That split lets
-//! the device database grow independently without the control engine
-//! needing to change.
+//! This crate is the generic control engine: [`device::RazerDevice`],
+//! driven by whichever [`razer_hid_abi::DeviceProfile`] matches the
+//! connected hardware. It's compiled as a `cdylib` and loaded at
+//! runtime (not linked at compile time) by `razer-hid-client` — see
+//! [`ffi`] for the dispatch-style entry points that boundary crosses
+//! through. Device-shape types and command vocabulary live in
+//! `razer-hid-abi`, which both this crate and its caller compile
+//! against directly; the catalog of concrete device profiles lives in
+//! the separate `razer-hid-devices-mice` crate (also loaded at
+//! runtime), not here.
 
 pub mod device;
-pub mod profile;
+pub mod ffi;
 
 pub use device::{DeviceError, DpiSetting, InterfaceInfo, RazerDevice};
-pub use profile::{
-    Confidence, DeviceKind, DeviceProfile, DpiProfile, IdentityProfile, LedZoneProfile,
-    MatrixPacketLength, MatrixProfile, PollRateProfile,
-};

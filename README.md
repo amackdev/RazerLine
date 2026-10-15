@@ -79,30 +79,50 @@ so one codebase covers all three.
 
 ```
 crates/
-  protocol/  razer-hid-protocol — byte-level report framing/CRC, command
-                                   vocabulary. No transport dependency.
-  core/      razer-hid-core     — RazerDevice control engine + DeviceProfile
-                                   shape, built on razer-hid-protocol. Knows
-                                   nothing about any specific device model.
-  devices/   razer-hid-devices  — the registry of supported models (one
-                                   DeviceProfile per file), built on
-                                   razer-hid-core's types.
-  cli/       razer-hid-cli      — `razer-ctl` command-line tool
-  gui/       razer-hid-gui      — `razerline` desktop control panel (egui)
+  abi/            razer-hid-abi          — compile-time-shared data shapes
+                                            (DeviceProfile & friends, command
+                                            vocabulary) and the Op dispatch
+                                            codes below. No logic, no cdylib —
+                                            think of it as a C header.
+  protocol/       razer-hid-protocol     — byte-level report framing/CRC.
+  core/           razer-hid-core         — the RazerDevice control engine.
+  devices-mice/   razer-hid-devices-mice — the registry of supported mice
+                                            (one DeviceProfile per file).
+  client/         razer-hid-client       — loads the two crates above as DLLs
+                                            at runtime and exposes the same
+                                            RazerDevice-shaped API over them.
+  cli/            razer-hid-cli          — `razer-ctl` command-line tool
+  gui/            razer-hid-gui          — `razerline` desktop control panel
 assets/   razer-inspired-logo.svg — original artwork, not Razer's mark
 udev/     Linux udev rule for non-root HID access
 .github/workflows/  CI: fmt/clippy/build/test on Linux, Windows, macOS
 ```
 
-Dependencies only point one way: `protocol ← core ← devices ← {cli, gui}`.
-Core never depends on the device registry — `RazerDevice::list_connected`/
-`open_first_supported` take a `&'static [DeviceProfile]` slice as an
-argument rather than reaching for a baked-in list, so the control engine
-stays usable (and testable) without the whole 90+ device database, and
-the database can grow independently without touching core.
+**`razer-hid-core` and `razer-hid-devices-mice` are `cdylib`s loaded at
+runtime, not linked at compile time.** `cargo build --workspace` still
+produces everything in one `target/{debug,release}/` directory — the
+loader (`razer-hid-client`) just looks for
+`librazer_hid_core.so`/`.dll`/`.dylib` and
+`librazer_hid_devices_mice.so`/`.dll`/`.dylib` next to the running
+`razer-ctl`/`razerline` binary rather than having Cargo link them in.
+That's what actually makes the device database swappable without
+recompiling the CLI/GUI — the binaries have **no** compile-time
+dependency on either one (`ldd target/release/razer-ctl` shows no
+`razer_hid_*` entries). The two dylibs cross that boundary through one
+small dispatch-style entry point (`razer_core_call`, keyed by
+`razer_hid_abi::Op`) rather than exposing every `RazerDevice` method as
+its own `extern "C"` function, and the device catalog crosses it via a
+single `razer_hid_plugin_devices()` export — see the doc comments in
+`crates/core/src/ffi.rs` and `crates/client/src/lib.rs` for the wire
+format. `razer-hid-protocol` is also built as a `cdylib` (satisfying the
+same "split into a DLL" shape) but is linked into `razer-hid-core` at
+compile time rather than `dlopen`'d — its only caller is the control
+engine itself, on every single command, so forcing that internal,
+zero-practical-benefit boundary through FFI as well wasn't worth the
+cost.
 
 The CLI and GUI are both written generically against
-`razer_hid_core::DeviceProfile` — neither one hardcodes "Basilisk V3"
+`razer_hid_abi::DeviceProfile` — neither one hardcodes "Basilisk V3"
 anywhere. Adding a new device to the registry makes it show up in both
 automatically, with only the capabilities that device actually declares.
 
@@ -123,7 +143,10 @@ cargo build --release --workspace
 ```
 
 Binaries land in `target/release/`: `razer-ctl` (CLI) and `razerline`
-(GUI).
+(GUI), alongside `librazer_hid_core.so`/`.dll`/`.dylib` and
+`librazer_hid_devices_mice.so`/`.dll`/`.dylib` — both binaries load
+those two at startup (see "Project layout" above), so if you copy a
+binary somewhere else, copy those two files with it.
 
 ### Linux device permissions
 
@@ -187,7 +210,7 @@ without touching layout code.
 
 ## Adding support for your device
 
-1. Copy `crates/devices/src/_template.rs` to a new file named after
+1. Copy `crates/devices-mice/src/_template.rs` to a new file named after
    your device (e.g. `deathadder_v3.rs`) — it has inline comments
    explaining each field.
 2. Find your device's USB vendor/product id (`lsusb -d 1532:` on Linux,
@@ -208,7 +231,7 @@ without touching layout code.
    Windows) and diff it against what this project sends.
 5. Set `confidence: Confidence::Verified` only for capabilities you
    personally tested working. Leave the rest `Unverified`.
-6. Register it in `crates/devices/src/lib.rs` (`mod` + `pub use` +
+6. Register it in `crates/devices-mice/src/lib.rs` (`mod` + `pub use` +
    add to `KNOWN_DEVICES`).
 7. Run `cargo fmt --all`, `cargo clippy --workspace --all-targets`, and
    `cargo test --workspace` — CI runs the same checks on Linux/Windows/

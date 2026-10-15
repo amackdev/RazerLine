@@ -1,0 +1,13 @@
+[package]
+name = "razer-hid-client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Loads razer-hid-core/-devices-mice as DLLs at runtime and exposes an ergonomic RazerDevice API over them"
+
+[dependencies]
+razer-hid-abi = { path = "../abi" }
+libloading.workspace = true
+thiserror.workspace = true

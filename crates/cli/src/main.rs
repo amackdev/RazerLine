@@ -1,6 +1,21 @@
 use clap::{Parser, Subcommand};
-use razer_hid_core::{DeviceProfile, RazerDevice};
-use razer_hid_devices::KNOWN_DEVICES;
+use razer_hid_abi::{DeviceProfile, LedZoneProfile};
+use razer_hid_client::RazerDevice;
+
+/// Library name (not a file path) of the device-catalog plugin —
+/// `razer-hid-client::load_known_devices` looks for this next to the
+/// running executable using the platform's DLL naming convention.
+const DEVICES_PLUGIN: &str = "razer_hid_devices_mice";
+
+fn known_devices() -> &'static [DeviceProfile] {
+    static CELL: std::sync::OnceLock<&'static [DeviceProfile]> = std::sync::OnceLock::new();
+    CELL.get_or_init(|| {
+        razer_hid_client::load_known_devices(DEVICES_PLUGIN).unwrap_or_else(|e| {
+            eprintln!("error: couldn't load device catalog plugin: {e}");
+            std::process::exit(1);
+        })
+    })
+}
 
 #[derive(Parser)]
 #[command(
@@ -122,7 +137,7 @@ fn hex_rgb(value: &str) -> Result<[u8; 3], String> {
 }
 
 fn select_profile(name: Option<&str>) -> Result<&'static DeviceProfile, String> {
-    let connected = RazerDevice::list_connected(KNOWN_DEVICES).map_err(|e| e.to_string())?;
+    let connected = razer_hid_client::list_connected(known_devices()).map_err(|e| e.to_string())?;
     match name {
         Some(needle) => connected
             .into_iter()
@@ -135,11 +150,10 @@ fn select_profile(name: Option<&str>) -> Result<&'static DeviceProfile, String> 
     }
 }
 
-fn find_zone(dev: &RazerDevice, name: &str) -> Result<razer_hid_core::LedZoneProfile, String> {
+fn find_zone(dev: &RazerDevice, name: &str) -> Result<&'static LedZoneProfile, String> {
     dev.led_zones()
         .iter()
         .find(|z| z.name.to_lowercase() == name.to_lowercase())
-        .copied()
         .ok_or_else(|| {
             let available: Vec<_> = dev.led_zones().iter().map(|z| z.name).collect();
             format!("no LED zone named \"{name}\" (available: {available:?})")
@@ -202,8 +216,8 @@ fn run(cli: Cli) -> Result<(), String> {
 }
 
 fn list_devices() -> Result<(), String> {
-    let connected = RazerDevice::list_connected(KNOWN_DEVICES).map_err(|e| e.to_string())?;
-    for profile in KNOWN_DEVICES {
+    let connected = razer_hid_client::list_connected(known_devices()).map_err(|e| e.to_string())?;
+    for profile in known_devices() {
         let status = if connected.iter().any(|c| c.product_id == profile.product_id) {
             "connected"
         } else {
@@ -216,7 +230,7 @@ fn list_devices() -> Result<(), String> {
 
 fn debug_usb() -> Result<(), String> {
     let interfaces =
-        RazerDevice::debug_list_interfaces(razer_hid_protocol::constants::RAZER_VENDOR_ID)
+        razer_hid_client::debug_list_interfaces(razer_hid_abi::constants::RAZER_VENDOR_ID)
             .map_err(|e| e.to_string())?;
     if interfaces.is_empty() {
         println!("No HID interfaces found under vendor id 0x1532 (Razer). Is anything plugged in?");
@@ -247,7 +261,7 @@ fn run_led(dev: &RazerDevice, action: LedAction) -> Result<(), String> {
                 println!("All zones off");
             } else {
                 let zone = find_zone(dev, &zone)?;
-                dev.set_led_off(&zone).map_err(|e| e.to_string())?;
+                dev.set_led_off(zone).map_err(|e| e.to_string())?;
                 println!("{} LED off", zone.name);
             }
         }
@@ -258,7 +272,7 @@ fn run_led(dev: &RazerDevice, action: LedAction) -> Result<(), String> {
                 println!("All zones set to #{color}");
             } else {
                 let zone = find_zone(dev, &zone)?;
-                dev.set_led_static(&zone, rgb).map_err(|e| e.to_string())?;
+                dev.set_led_static(zone, rgb).map_err(|e| e.to_string())?;
                 println!("{} LED set to #{color}", zone.name);
             }
         }
@@ -269,7 +283,7 @@ fn run_led(dev: &RazerDevice, action: LedAction) -> Result<(), String> {
                 println!("All zones breathing #{color}");
             } else {
                 let zone = find_zone(dev, &zone)?;
-                dev.set_led_breathing(&zone, rgb)
+                dev.set_led_breathing(zone, rgb)
                     .map_err(|e| e.to_string())?;
                 println!("{} LED breathing #{color}", zone.name);
             }
@@ -280,7 +294,7 @@ fn run_led(dev: &RazerDevice, action: LedAction) -> Result<(), String> {
                 println!("All zones cycling spectrum");
             } else {
                 let zone = find_zone(dev, &zone)?;
-                dev.set_led_spectrum(&zone).map_err(|e| e.to_string())?;
+                dev.set_led_spectrum(zone).map_err(|e| e.to_string())?;
                 println!("{} LED cycling spectrum", zone.name);
             }
         }
@@ -290,7 +304,7 @@ fn run_led(dev: &RazerDevice, action: LedAction) -> Result<(), String> {
                 println!("All zones wave");
             } else {
                 let zone = find_zone(dev, &zone)?;
-                dev.set_led_wave(&zone, direction)
+                dev.set_led_wave(zone, direction)
                     .map_err(|e| e.to_string())?;
                 println!("{} LED wave", zone.name);
             }
@@ -302,7 +316,7 @@ fn run_led(dev: &RazerDevice, action: LedAction) -> Result<(), String> {
                 println!("All zones brightness set to {percent}%");
             } else {
                 let zone = find_zone(dev, &zone)?;
-                dev.set_led_brightness(&zone, percent)
+                dev.set_led_brightness(zone, percent)
                     .map_err(|e| e.to_string())?;
                 println!("{} LED brightness set to {percent}%", zone.name);
             }

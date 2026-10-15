@@ -1,9 +1,11 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/abi",
     "crates/protocol",
     "crates/core",
-    "crates/devices",
+    "crates/devices-mice",
+    "crates/client",
     "crates/cli",
     "crates/gui",
 ]
@@ -19,3 +21,4 @@ authors = ["razer-hid-ctl contributors"]
 hidapi = "2.6"
 thiserror = "1.0"
 clap = { version = "4", features = ["derive"] }
+libloading = "0.8"

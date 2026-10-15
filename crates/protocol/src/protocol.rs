@@ -35,7 +35,7 @@
 //! excluding the trailing `crc`/`reserved` bytes. Shifted by the 1-byte
 //! hidapi prefix above, that's buffer bytes 3..=88 inclusive.
 
-use crate::constants::{ARGS_LENGTH, DEFAULT_TRANSACTION_ID, REPORT_LENGTH};
+use razer_hid_abi::constants::{ARGS_LENGTH, DEFAULT_TRANSACTION_ID, REPORT_LENGTH};
 
 const CRC_START: usize = 3;
 const CRC_END: usize = 88; // inclusive

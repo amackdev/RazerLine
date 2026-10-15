@@ -2674,13 +2674,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20675572f6f24e9e76ef639bc5552774ed45f1c30e2951e1e99c59888861c539"
 
 [[package]]
+name = "razer-hid-abi"
+version = "0.1.0"
+
+[[package]]
 name = "razer-hid-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
- "razer-hid-core",
- "razer-hid-devices",
- "razer-hid-protocol",
+ "razer-hid-abi",
+ "razer-hid-client",
+]
+
+[[package]]
+name = "razer-hid-client"
+version = "0.1.0"
+dependencies = [
+ "libloading 0.8.9",
+ "razer-hid-abi",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -2688,16 +2700,16 @@ name = "razer-hid-core"
 version = "0.1.0"
 dependencies = [
  "hidapi",
+ "razer-hid-abi",
  "razer-hid-protocol",
  "thiserror 1.0.69",
 ]
 
 [[package]]
-name = "razer-hid-devices"
+name = "razer-hid-devices-mice"
 version = "0.1.0"
 dependencies = [
- "razer-hid-core",
- "razer-hid-protocol",
+ "razer-hid-abi",
 ]
 
 [[package]]
@@ -2705,15 +2717,15 @@ name = "razer-hid-gui"
 version = "0.1.0"
 dependencies = [
  "eframe",
- "razer-hid-core",
- "razer-hid-devices",
- "razer-hid-protocol",
+ "razer-hid-abi",
+ "razer-hid-client",
 ]
 
 [[package]]
 name = "razer-hid-protocol"
 version = "0.1.0"
 dependencies = [
+ "razer-hid-abi",
  "thiserror 1.0.69",
 ]
 

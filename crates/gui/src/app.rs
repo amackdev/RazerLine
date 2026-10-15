@@ -11,8 +11,21 @@ use std::time::{Duration, Instant};
 const INTER_ZONE_DELAY: Duration = Duration::from_millis(60);
 
 use eframe::egui;
-use razer_hid_core::{DeviceProfile, LedZoneProfile, RazerDevice};
-use razer_hid_devices::KNOWN_DEVICES;
+use razer_hid_abi::{DeviceProfile, LedZoneProfile};
+use razer_hid_client::RazerDevice;
+
+/// Library name (not a file path) of the device-catalog plugin —
+/// `razer_hid_client::load_known_devices` looks for this next to the
+/// running executable using the platform's DLL naming convention.
+const DEVICES_PLUGIN: &str = "razer_hid_devices_mice";
+
+fn known_devices() -> &'static [DeviceProfile] {
+    static CELL: std::sync::OnceLock<&'static [DeviceProfile]> = std::sync::OnceLock::new();
+    CELL.get_or_init(|| {
+        razer_hid_client::load_known_devices(DEVICES_PLUGIN)
+            .expect("couldn't load device catalog plugin")
+    })
+}
 
 use crate::theme;
 use crate::widgets::{self, PreviewKind};
@@ -84,7 +97,7 @@ impl GuiApp {
     /// handle on every tick: only touches `self.device` when the active
     /// device actually disappeared or something new needs auto-selecting.
     fn rescan(&mut self) {
-        let found = match RazerDevice::list_connected(KNOWN_DEVICES) {
+        let found = match razer_hid_client::list_connected(known_devices()) {
             Ok(found) => found,
             Err(e) => {
                 self.set_status(format!("Scan error: {e}"), true);
@@ -138,7 +151,7 @@ impl GuiApp {
         self.status_is_error = is_error;
     }
 
-    fn apply<T>(&mut self, result: Result<T, razer_hid_core::DeviceError>, ok_msg: &str) {
+    fn apply<T>(&mut self, result: Result<T, razer_hid_client::ClientError>, ok_msg: &str) {
         match result {
             Ok(_) => self.set_status(ok_msg, false),
             Err(e) => self.set_status(format!("Error: {e}"), true),
@@ -152,10 +165,13 @@ impl GuiApp {
         &mut self,
         zones: &'static [LedZoneProfile],
         selected_idx: usize,
-        mut f: impl FnMut(&RazerDevice, &LedZoneProfile) -> Result<(), razer_hid_core::DeviceError>,
+        mut f: impl FnMut(
+            &RazerDevice,
+            &'static LedZoneProfile,
+        ) -> Result<(), razer_hid_client::ClientError>,
         ok_msg: &str,
     ) {
-        let targets: &[LedZoneProfile] = if self.sync_zones {
+        let targets: &'static [LedZoneProfile] = if self.sync_zones {
             zones
         } else {
             &zones[selected_idx..=selected_idx]
@@ -187,11 +203,14 @@ impl GuiApp {
         &mut self,
         zones: &'static [LedZoneProfile],
         selected_idx: usize,
-        mut zone_f: impl FnMut(&RazerDevice, &LedZoneProfile) -> Result<(), razer_hid_core::DeviceError>,
-        matrix_f: Option<impl FnOnce(&RazerDevice) -> Result<(), razer_hid_core::DeviceError>>,
+        mut zone_f: impl FnMut(
+            &RazerDevice,
+            &'static LedZoneProfile,
+        ) -> Result<(), razer_hid_client::ClientError>,
+        matrix_f: Option<impl FnOnce(&RazerDevice) -> Result<(), razer_hid_client::ClientError>>,
         ok_msg: &str,
     ) {
-        let targets: &[LedZoneProfile] = if self.sync_zones {
+        let targets: &'static [LedZoneProfile] = if self.sync_zones {
             zones
         } else {
             &zones[selected_idx..=selected_idx]
@@ -458,7 +477,7 @@ impl GuiApp {
 
             let has_matrix = profile.matrix.is_some();
             let matrix_has_effects = profile.matrix.and_then(|m| m.effect_led_id).is_some();
-            let supports = |effect: razer_hid_protocol::commands::LedEffect| {
+            let supports = |effect: razer_hid_abi::commands::LedEffect| {
                 !profile.unsupported_led_effects.contains(&effect)
             };
 
@@ -527,7 +546,7 @@ impl GuiApp {
                         "LED set to static color",
                     );
                 }
-                if supports(razer_hid_protocol::commands::LedEffect::Breathing)
+                if supports(razer_hid_abi::commands::LedEffect::Breathing)
                     && ui.button("Breathing").clicked()
                 {
                     let color = self.led_color;

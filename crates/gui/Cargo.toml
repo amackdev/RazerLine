@@ -12,7 +12,6 @@ name = "razerline"
 path = "src/main.rs"
 
 [dependencies]
-razer-hid-core = { path = "../core" }
-razer-hid-devices = { path = "../devices" }
-razer-hid-protocol = { path = "../protocol" }
+razer-hid-abi = { path = "../abi" }
+razer-hid-client = { path = "../client" }
 eframe = "0.28"

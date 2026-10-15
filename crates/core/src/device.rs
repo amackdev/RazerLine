@@ -7,10 +7,9 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use hidapi::{HidApi, HidDevice};
-use razer_hid_protocol::constants::*;
+use razer_hid_abi::constants::*;
+use razer_hid_abi::{DeviceProfile, LedZoneProfile};
 use razer_hid_protocol::RazerReport;
-
-use crate::profile::{DeviceProfile, LedZoneProfile};
 
 #[derive(Debug, thiserror::Error)]
 pub enum DeviceError {
@@ -297,7 +296,7 @@ impl RazerDevice {
             }
         }
         let args = vec![
-            razer_hid_protocol::commands::Storage::Variable as u8,
+            razer_hid_abi::commands::Storage::Variable as u8,
             (x >> 8) as u8,
             (x & 0xFF) as u8,
             (y >> 8) as u8,
@@ -317,7 +316,7 @@ impl RazerDevice {
             .dpi
             .ok_or(DeviceError::Unsupported("DPI", self.profile.name))?;
         let args = vec![
-            razer_hid_protocol::commands::Storage::None as u8,
+            razer_hid_abi::commands::Storage::None as u8,
             0,
             0,
             0,
@@ -348,7 +347,7 @@ impl RazerDevice {
                 poll.supported_hz
             )));
         }
-        let rate_byte = razer_hid_protocol::commands::PollRateHz::from_hz(hz)
+        let rate_byte = razer_hid_abi::commands::PollRateHz::from_hz(hz)
             .ok_or_else(|| DeviceError::OutOfRange(format!("unsupported poll rate {hz}Hz")))?;
         let mut report = RazerReport::new(
             poll.command_class,
@@ -372,7 +371,7 @@ impl RazerDevice {
         report.transaction_id = poll.transaction_id;
         let resp = self.transact(&report)?;
         let raw = resp.arguments.first().copied().unwrap_or(0);
-        razer_hid_protocol::commands::PollRateHz::from_byte(raw).ok_or_else(|| {
+        razer_hid_abi::commands::PollRateHz::from_byte(raw).ok_or_else(|| {
             DeviceError::OutOfRange(format!(
                 "device reported an unrecognized poll rate byte 0x{raw:02x}"
             ))
@@ -393,13 +392,13 @@ impl RazerDevice {
     // deliberate zero gaps that match what the firmware expects).
 
     pub fn set_led_off(&self, zone: &LedZoneProfile) -> Result<(), DeviceError> {
-        self.send_led_effect(zone, razer_hid_protocol::commands::LedEffect::Off, &[0; 3])
+        self.send_led_effect(zone, razer_hid_abi::commands::LedEffect::Off, &[0; 3])
     }
 
     pub fn set_led_static(&self, zone: &LedZoneProfile, rgb: [u8; 3]) -> Result<(), DeviceError> {
         // args[3..5] = 0, args[5] = 0x01, args[6..8] = rgb
         let tail = [0x00, 0x00, 0x01, rgb[0], rgb[1], rgb[2]];
-        self.send_led_effect(zone, razer_hid_protocol::commands::LedEffect::Static, &tail)
+        self.send_led_effect(zone, razer_hid_abi::commands::LedEffect::Static, &tail)
     }
 
     pub fn set_led_breathing(
@@ -409,19 +408,11 @@ impl RazerDevice {
     ) -> Result<(), DeviceError> {
         // args[3] = 0x01 (one color), args[4] = 0, args[5] = 0x01, args[6..8] = rgb
         let tail = [0x01, 0x00, 0x01, rgb[0], rgb[1], rgb[2]];
-        self.send_led_effect(
-            zone,
-            razer_hid_protocol::commands::LedEffect::Breathing,
-            &tail,
-        )
+        self.send_led_effect(zone, razer_hid_abi::commands::LedEffect::Breathing, &tail)
     }
 
     pub fn set_led_spectrum(&self, zone: &LedZoneProfile) -> Result<(), DeviceError> {
-        self.send_led_effect(
-            zone,
-            razer_hid_protocol::commands::LedEffect::Spectrum,
-            &[0; 3],
-        )
+        self.send_led_effect(zone, razer_hid_abi::commands::LedEffect::Spectrum, &[0; 3])
     }
 
     pub fn set_led_wave(&self, zone: &LedZoneProfile, direction: u8) -> Result<(), DeviceError> {
@@ -429,7 +420,7 @@ impl RazerDevice {
         // fixed default — lower is faster), args[5] = 0
         let direction = direction.min(2);
         let tail = [direction, 0x28, 0x00];
-        self.send_led_effect(zone, razer_hid_protocol::commands::LedEffect::Wave, &tail)
+        self.send_led_effect(zone, razer_hid_abi::commands::LedEffect::Wave, &tail)
     }
 
     /// `tail` is always exactly 3 or 6 bytes: the args *after* the 3-byte
@@ -438,7 +429,7 @@ impl RazerDevice {
     fn send_led_effect(
         &self,
         zone: &LedZoneProfile,
-        effect: razer_hid_protocol::commands::LedEffect,
+        effect: razer_hid_abi::commands::LedEffect,
         tail: &[u8],
     ) -> Result<(), DeviceError> {
         self.send_effect_report(
@@ -460,11 +451,11 @@ impl RazerDevice {
         command_id: u8,
         transaction_id: u8,
         led_id: u8,
-        effect: razer_hid_protocol::commands::LedEffect,
+        effect: razer_hid_abi::commands::LedEffect,
         tail: &[u8],
     ) -> Result<(), DeviceError> {
         let mut args = vec![
-            razer_hid_protocol::commands::Storage::Variable as u8,
+            razer_hid_abi::commands::Storage::Variable as u8,
             led_id,
             effect as u8,
         ];
@@ -489,7 +480,7 @@ impl RazerDevice {
         }
         let value = ((percent as u16) * 255 / 100) as u8;
         let args = vec![
-            razer_hid_protocol::commands::Storage::Variable as u8,
+            razer_hid_abi::commands::Storage::Variable as u8,
             zone.id,
             value,
         ];
@@ -645,8 +636,8 @@ impl RazerDevice {
         }
 
         let data_size = match matrix.write_packet_length {
-            crate::profile::MatrixPacketLength::Fixed(n) => n as usize,
-            crate::profile::MatrixPacketLength::Computed => 5 + colors.len() * 3,
+            razer_hid_abi::MatrixPacketLength::Fixed(n) => n as usize,
+            razer_hid_abi::MatrixPacketLength::Computed => 5 + colors.len() * 3,
         };
         let mut args = vec![0u8; data_size];
         args[2] = row;
@@ -673,7 +664,7 @@ impl RazerDevice {
             .ok_or(DeviceError::Unsupported("LED matrix", self.profile.name))?;
 
         let mut args = vec![0u8; 12];
-        args[2] = razer_hid_protocol::commands::LedEffect::Custom as u8;
+        args[2] = razer_hid_abi::commands::LedEffect::Custom as u8;
 
         let mut report =
             RazerReport::new(matrix.commit_command_class, matrix.commit_command_id, args)?;
@@ -723,7 +714,7 @@ impl RazerDevice {
             cmd,
             txn,
             led_id,
-            razer_hid_protocol::commands::LedEffect::Spectrum,
+            razer_hid_abi::commands::LedEffect::Spectrum,
             &[0; 3],
         )
     }
@@ -739,7 +730,7 @@ impl RazerDevice {
             cmd,
             txn,
             led_id,
-            razer_hid_protocol::commands::LedEffect::Wave,
+            razer_hid_abi::commands::LedEffect::Wave,
             &tail,
         )
     }

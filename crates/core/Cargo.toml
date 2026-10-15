@@ -5,9 +5,13 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "Unofficial HID protocol + multi-device control library for Razer peripherals"
+description = "Razer HID control engine, loaded as a DLL at runtime by razer-hid-client"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+razer-hid-abi = { path = "../abi" }
 razer-hid-protocol = { path = "../protocol" }
 hidapi.workspace = true
 thiserror.workspace = true
