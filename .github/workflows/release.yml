@@ -3,7 +3,7 @@ name: Release
 # Builds and attaches platform binaries to a GitHub Release whenever a
 # version tag (v1.2.3) is pushed. Doesn't publish to crates.io — this is
 # an end-user application, not a library other crates are meant to depend
-# on; see CONTRIBUTING.md if that changes.
+# on.
 
 on:
   push:
