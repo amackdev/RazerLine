@@ -38,6 +38,31 @@ enum Command {
         #[command(subcommand)]
         action: LedAction,
     },
+    /// Control the device's addressable LED matrix/strip (e.g. an
+    /// underglow strip), separate from the simple single-color zones.
+    Matrix {
+        #[command(subcommand)]
+        action: MatrixAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum MatrixAction {
+    /// Print the matrix's (rows, cols) dimensions.
+    Dims,
+    /// Fill every LED with one solid color and commit immediately.
+    Fill { color: String },
+    /// Turn every LED off.
+    Off,
+    /// Write one or more colors starting at a column, then commit.
+    /// Colors are comma-separated hex, e.g. FF0000,00FF00,0000FF
+    Row {
+        #[arg(long, default_value_t = 0)]
+        row: u8,
+        #[arg(long, default_value_t = 0)]
+        start: u8,
+        colors: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -158,6 +183,7 @@ fn run(cli: Cli) -> Result<(), String> {
             println!("Polling rate set to {hz}Hz");
         }
         Command::Led { action } => run_led(&dev, action)?,
+        Command::Matrix { action } => run_matrix(&dev, action)?,
     }
     Ok(())
 }
@@ -227,6 +253,40 @@ fn run_led(dev: &RazerDevice, action: LedAction) -> Result<(), String> {
             dev.set_led_brightness(&zone, percent)
                 .map_err(|e| e.to_string())?;
             println!("{} LED brightness set to {percent}%", zone.name);
+        }
+    }
+    Ok(())
+}
+
+fn run_matrix(dev: &RazerDevice, action: MatrixAction) -> Result<(), String> {
+    match action {
+        MatrixAction::Dims => {
+            let (rows, cols) = dev
+                .matrix_dims()
+                .ok_or_else(|| "this device has no addressable LED matrix".to_string())?;
+            println!("{rows} row(s) x {cols} column(s)");
+        }
+        MatrixAction::Fill { color } => {
+            let rgb = hex_rgb(&color)?;
+            dev.fill_matrix(rgb).map_err(|e| e.to_string())?;
+            println!("Matrix filled with #{color}");
+        }
+        MatrixAction::Off => {
+            dev.fill_matrix([0, 0, 0]).map_err(|e| e.to_string())?;
+            println!("Matrix off");
+        }
+        MatrixAction::Row { row, start, colors } => {
+            let rgbs = colors
+                .split(',')
+                .map(hex_rgb)
+                .collect::<Result<Vec<_>, _>>()?;
+            dev.set_matrix_row(row, start, &rgbs)
+                .map_err(|e| e.to_string())?;
+            dev.commit_matrix_frame().map_err(|e| e.to_string())?;
+            println!(
+                "Row {row} columns {start}..{} written",
+                start as usize + rgbs.len()
+            );
         }
     }
     Ok(())

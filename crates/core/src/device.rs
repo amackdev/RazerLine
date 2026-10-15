@@ -75,15 +75,19 @@ pub struct RazerDevice {
 /// exercise the transport if the profile declares neither.
 fn probe_report(profile: &DeviceProfile) -> RazerReport {
     if let Some(identity) = profile.identity {
-        RazerReport::new(
+        let mut report = RazerReport::new(
             identity.command_class,
             identity.firmware_command_id,
             vec![0u8; 2],
         )
-        .expect("2-byte probe args never exceed ARGS_LENGTH")
+        .expect("2-byte probe args never exceed ARGS_LENGTH");
+        report.transaction_id = identity.transaction_id;
+        report
     } else if let Some(dpi) = profile.dpi {
-        RazerReport::new(dpi.command_class, dpi.get_command_id, vec![0u8; 7])
-            .expect("7-byte probe args never exceed ARGS_LENGTH")
+        let mut report = RazerReport::new(dpi.command_class, dpi.get_command_id, vec![0u8; 7])
+            .expect("7-byte probe args never exceed ARGS_LENGTH");
+        report.transaction_id = dpi.transaction_id;
+        report
     } else {
         RazerReport::new(0x00, 0x00, Vec::new()).expect("empty probe args never exceed ARGS_LENGTH")
     }
@@ -294,7 +298,8 @@ impl RazerDevice {
             0x00,
             0x00,
         ];
-        let report = RazerReport::new(dpi.command_class, dpi.set_command_id, args)?;
+        let mut report = RazerReport::new(dpi.command_class, dpi.set_command_id, args)?;
+        report.transaction_id = dpi.transaction_id;
         self.transact(&report)?;
         Ok(())
     }
@@ -305,7 +310,8 @@ impl RazerDevice {
             .dpi
             .ok_or(DeviceError::Unsupported("DPI", self.profile.name))?;
         let args = vec![crate::commands::Storage::None as u8, 0, 0, 0, 0, 0, 0];
-        let report = RazerReport::new(dpi.command_class, dpi.get_command_id, args)?;
+        let mut report = RazerReport::new(dpi.command_class, dpi.get_command_id, args)?;
+        report.transaction_id = dpi.transaction_id;
         let resp = self.transact(&report)?;
         let a = &resp.arguments;
         Ok(DpiSetting {
@@ -329,11 +335,12 @@ impl RazerDevice {
         }
         let rate_byte = crate::commands::PollRateHz::from_hz(hz)
             .ok_or_else(|| DeviceError::OutOfRange(format!("unsupported poll rate {hz}Hz")))?;
-        let report = RazerReport::new(
+        let mut report = RazerReport::new(
             poll.command_class,
             poll.set_command_id,
             vec![rate_byte as u8],
         )?;
+        report.transaction_id = poll.transaction_id;
         self.transact(&report)?;
         Ok(())
     }
@@ -398,7 +405,8 @@ impl RazerDevice {
             effect as u8,
         ];
         args.extend_from_slice(tail);
-        let report = RazerReport::new(zone.command_class, zone.effect_command_id, args)?;
+        let mut report = RazerReport::new(zone.command_class, zone.effect_command_id, args)?;
+        report.transaction_id = zone.transaction_id;
         self.transact(&report)?;
         Ok(())
     }
@@ -417,9 +425,92 @@ impl RazerDevice {
         }
         let value = ((percent as u16) * 255 / 100) as u8;
         let args = vec![crate::commands::Storage::Variable as u8, zone.id, value];
-        let report = RazerReport::new(zone.command_class, cmd_id, args)?;
+        let mut report = RazerReport::new(zone.command_class, cmd_id, args)?;
+        report.transaction_id = zone.transaction_id;
         self.transact(&report)?;
         Ok(())
+    }
+
+    // -- Addressable LED matrix (e.g. an underglow strip) --------------------
+
+    /// `(rows, cols)` of the addressable matrix, if this device has one
+    /// separate from its simple single-color [`LedZoneProfile`] zones.
+    pub fn matrix_dims(&self) -> Option<(u8, u8)> {
+        self.profile.matrix.map(|m| (m.rows, m.cols))
+    }
+
+    /// Writes one row of raw RGB pixel data starting at `start_col`.
+    /// Doesn't take effect until [`commit_matrix_frame`](Self::commit_matrix_frame)
+    /// is called afterward — this only stages the data.
+    pub fn set_matrix_row(
+        &self,
+        row: u8,
+        start_col: u8,
+        colors: &[[u8; 3]],
+    ) -> Result<(), DeviceError> {
+        let matrix = self
+            .profile
+            .matrix
+            .ok_or(DeviceError::Unsupported("LED matrix", self.profile.name))?;
+
+        if row >= matrix.rows {
+            return Err(DeviceError::OutOfRange(format!(
+                "row {row} out of range (0..{})",
+                matrix.rows
+            )));
+        }
+        let end_col = start_col as usize + colors.len();
+        if colors.is_empty() || end_col > matrix.cols as usize {
+            return Err(DeviceError::OutOfRange(format!(
+                "columns {start_col}..{end_col} out of range (0..{})",
+                matrix.cols
+            )));
+        }
+
+        let mut args = vec![0u8; matrix.write_packet_length as usize];
+        args[2] = row;
+        args[3] = start_col;
+        args[4] = start_col + colors.len() as u8 - 1; // stop_col, inclusive
+        for (i, rgb) in colors.iter().enumerate() {
+            let offset = 5 + i * 3;
+            args[offset..offset + 3].copy_from_slice(rgb);
+        }
+
+        let mut report =
+            RazerReport::new(matrix.write_command_class, matrix.write_command_id, args)?;
+        report.transaction_id = matrix.write_transaction_id;
+        self.transact(&report)?;
+        Ok(())
+    }
+
+    /// Tells the device to display whatever was most recently staged via
+    /// [`set_matrix_row`](Self::set_matrix_row).
+    pub fn commit_matrix_frame(&self) -> Result<(), DeviceError> {
+        let matrix = self
+            .profile
+            .matrix
+            .ok_or(DeviceError::Unsupported("LED matrix", self.profile.name))?;
+
+        let mut args = vec![0u8; 12];
+        args[2] = crate::commands::LedEffect::Custom as u8;
+
+        let mut report =
+            RazerReport::new(matrix.commit_command_class, matrix.commit_command_id, args)?;
+        report.transaction_id = matrix.commit_transaction_id;
+        self.transact(&report)?;
+        Ok(())
+    }
+
+    /// Convenience: fills every column of row 0 with one color and
+    /// commits immediately. For a device with more than one row, use
+    /// [`set_matrix_row`](Self::set_matrix_row) directly per row instead.
+    pub fn fill_matrix(&self, rgb: [u8; 3]) -> Result<(), DeviceError> {
+        let (_, cols) = self
+            .matrix_dims()
+            .ok_or(DeviceError::Unsupported("LED matrix", self.profile.name))?;
+        let colors = vec![rgb; cols as usize];
+        self.set_matrix_row(0, 0, &colors)?;
+        self.commit_matrix_frame()
     }
 
     // -- Identity ------------------------------------------------------------
@@ -429,11 +520,12 @@ impl RazerDevice {
             "firmware query",
             self.profile.name,
         ))?;
-        let report = RazerReport::new(
+        let mut report = RazerReport::new(
             identity.command_class,
             identity.firmware_command_id,
             vec![0u8; 2],
         )?;
+        report.transaction_id = identity.transaction_id;
         let resp = self.transact(&report)?;
         Ok(format!("v{}.{}", resp.arguments[0], resp.arguments[1]))
     }
@@ -443,11 +535,12 @@ impl RazerDevice {
             .profile
             .identity
             .ok_or(DeviceError::Unsupported("serial query", self.profile.name))?;
-        let report = RazerReport::new(
+        let mut report = RazerReport::new(
             identity.command_class,
             identity.serial_command_id,
             vec![0u8; 22],
         )?;
+        report.transaction_id = identity.transaction_id;
         let resp = self.transact(&report)?;
         let end = resp
             .arguments

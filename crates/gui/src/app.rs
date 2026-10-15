@@ -20,6 +20,8 @@ pub struct GuiApp {
     brightness: u8,
     last_preview: PreviewKind,
 
+    matrix_color: [u8; 3],
+
     info_text: Option<String>,
 }
 
@@ -37,6 +39,7 @@ impl Default for GuiApp {
             led_color: [64, 209, 128],
             brightness: 100,
             last_preview: PreviewKind::Off,
+            matrix_color: [64, 209, 128],
             info_text: None,
         };
         app.rescan();
@@ -225,6 +228,9 @@ impl GuiApp {
         if !profile.leds.is_empty() {
             self.ui_lighting_card(ui, profile);
         }
+        if profile.matrix.is_some() {
+            self.ui_matrix_card(ui);
+        }
         if profile.identity.is_some() {
             self.ui_info_card(ui);
         }
@@ -376,6 +382,42 @@ impl GuiApp {
                     self.apply(r, "Brightness updated");
                 }
             }
+        });
+    }
+
+    fn ui_matrix_card(&mut self, ui: &mut egui::Ui) {
+        widgets::card(ui, "Underglow", |ui| {
+            let dims = self.device.as_ref().and_then(|d| d.matrix_dims());
+            let Some((rows, cols)) = dims else {
+                return;
+            };
+            ui.label(
+                egui::RichText::new(format!("{rows} row x {cols} individually addressable LEDs"))
+                    .small()
+                    .color(theme::MUTED),
+            );
+            ui.add_space(6.0);
+
+            widgets::effect_preview(ui, PreviewKind::Static, self.matrix_color, 0.0);
+            ui.add_space(10.0);
+
+            ui.horizontal(|ui| {
+                ui.color_edit_button_srgb(&mut self.matrix_color);
+                widgets::color_swatch(ui, self.matrix_color, 20.0);
+            });
+            ui.add_space(8.0);
+
+            ui.horizontal(|ui| {
+                if ui.button("Fill").clicked() {
+                    let color = self.matrix_color;
+                    let r = self.device.as_ref().unwrap().fill_matrix(color);
+                    self.apply(r, "Underglow filled");
+                }
+                if ui.button("Off").clicked() {
+                    let r = self.device.as_ref().unwrap().fill_matrix([0, 0, 0]);
+                    self.apply(r, "Underglow off");
+                }
+            });
         });
     }
 

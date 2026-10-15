@@ -10,8 +10,10 @@
 //! and `devices/_template.rs` for an annotated starting point.
 
 mod basilisk_v3;
+mod viper_ultimate;
 
 pub use basilisk_v3::BASILISK_V3;
+pub use viper_ultimate::{VIPER_ULTIMATE_WIRED, VIPER_ULTIMATE_WIRELESS};
 
 /// The broad category of peripheral. Currently only `Mouse` capabilities
 /// (DPI, polling rate, two-zone RGB) are modeled end to end; keyboards and
@@ -33,6 +35,11 @@ pub struct DpiProfile {
     pub get_command_id: u8,
     pub min: u16,
     pub max: u16,
+    /// Transaction id this exact command needs. This is **not** always
+    /// the same across a whole device: e.g. the Viper Ultimate uses
+    /// 0xFF for DPI/poll-rate/identity but 0x3F for LED commands. Always
+    /// check per-command, not just per-device, against the real source.
+    pub transaction_id: u8,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -40,6 +47,7 @@ pub struct PollRateProfile {
     pub command_class: u8,
     pub set_command_id: u8,
     pub supported_hz: &'static [u32],
+    pub transaction_id: u8,
 }
 
 /// One independently controllable RGB zone (e.g. "Scroll wheel", "Logo").
@@ -50,6 +58,7 @@ pub struct LedZoneProfile {
     pub command_class: u8,
     pub effect_command_id: u8,
     pub brightness_command_id: Option<u8>,
+    pub transaction_id: u8,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -57,6 +66,32 @@ pub struct IdentityProfile {
     pub command_class: u8,
     pub firmware_command_id: u8,
     pub serial_command_id: u8,
+    pub transaction_id: u8,
+}
+
+/// A per-pixel addressable LED strip/grid driven by writing one or more
+/// rows of RGB data and then a separate "commit" command that tells the
+/// device to actually display what was written (OpenRazer's "custom
+/// frame" mechanism). This is a different, lower-level mechanism than
+/// [`LedZoneProfile`] — use it for strips with more than one
+/// individually addressable LED (e.g. a mouse's underglow), not for a
+/// single-color zone.
+#[derive(Debug, Clone, Copy)]
+pub struct MatrixProfile {
+    pub rows: u8,
+    pub cols: u8,
+    pub write_command_class: u8,
+    pub write_command_id: u8,
+    /// Total declared data length of the write command. Some devices
+    /// need this fixed regardless of how many columns are actually being
+    /// written (OpenRazer's `razer_chroma_extended_matrix_set_custom_frame`
+    /// always uses 0x47); others compute it from the row length instead.
+    /// Check the real source for your device rather than assuming 0x47.
+    pub write_packet_length: u8,
+    pub write_transaction_id: u8,
+    pub commit_command_class: u8,
+    pub commit_command_id: u8,
+    pub commit_transaction_id: u8,
 }
 
 /// Everything the control library needs to know about one device model.
@@ -73,6 +108,7 @@ pub struct DeviceProfile {
     pub dpi: Option<DpiProfile>,
     pub poll_rate: Option<PollRateProfile>,
     pub leds: &'static [LedZoneProfile],
+    pub matrix: Option<MatrixProfile>,
     pub identity: Option<IdentityProfile>,
 }
 
@@ -85,7 +121,8 @@ pub enum Confidence {
     Unverified,
 }
 
-pub const KNOWN_DEVICES: &[DeviceProfile] = &[BASILISK_V3];
+pub const KNOWN_DEVICES: &[DeviceProfile] =
+    &[BASILISK_V3, VIPER_ULTIMATE_WIRED, VIPER_ULTIMATE_WIRELESS];
 
 pub fn find_by_pid(vendor_id: u16, product_id: u16) -> Option<&'static DeviceProfile> {
     KNOWN_DEVICES

@@ -13,10 +13,20 @@ to verify/extend them, and `CONTRIBUTING.md` for adding your own device.
 
 ## What works today
 
-Currently one device profile is included: **Razer Basilisk V3** (wired),
-marked `Unverified` — the command bytes follow the pattern most Razer mice
-use, but haven't been confirmed against this exact model by a maintainer
-yet. If you own one, please try it and open an issue either way.
+Two device profiles are included:
+
+- **Razer Basilisk V3** (wired) — `Confidence::Verified`. DPI, polling
+  rate, Static/Spectrum/Wave LED effects, and brightness are confirmed
+  against real hardware. Breathing and Off are confirmed *rejected* by
+  the firmware itself for this exact model — not a bug, OpenRazer's own
+  driver doesn't attempt them for this PID either. Its bottom/underglow
+  strip (11 individually addressable LEDs) is controllable via the
+  matrix commands below.
+- **Razer Viper Ultimate** (wired/wireless) — `Confidence::Unverified`.
+  Built the same way (cross-checked against OpenRazer's driver source
+  and daemon metadata), but not yet run against real hardware by anyone
+  on this project. If you own one, please try it and report back either
+  way.
 
 Capabilities modeled so far (per-device, only shown if the device profile
 declares them):
@@ -25,6 +35,9 @@ declares them):
 - USB polling rate
 - Per-zone RGB lighting: static color, breathing, spectrum, wave, off,
   brightness
+- An addressable LED matrix/strip (e.g. underglow) separate from the
+  simple zones above, for devices with more than one individually
+  controllable LED in a strip
 - Firmware version / serial number query
 
 Not yet in scope: per-key keyboard RGB matrices, on-device macros/profile
@@ -101,6 +114,12 @@ razer-ctl led breathing 00FF00 --zone Logo
 razer-ctl led spectrum --zone Logo
 razer-ctl led brightness 50 --zone Logo
 razer-ctl led off --zone Logo
+
+# Addressable LED matrix/strip (e.g. underglow), where the device has one:
+razer-ctl matrix dims                  # e.g. "1 row(s) x 11 column(s)"
+razer-ctl matrix fill FF0000           # every LED to one color
+razer-ctl matrix off
+razer-ctl matrix row --start 0 FF0000,00FF00,0000FF   # per-LED colors
 
 # If more than one supported device is connected:
 razer-ctl --device basilisk dpi 1600

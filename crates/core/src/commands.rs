@@ -34,6 +34,10 @@ pub enum MouseCommand {
 #[repr(u8)]
 pub enum LedCommand {
     SetEffect = 0x02,
+    /// Writes one row of raw RGB pixel data for the "custom frame" matrix
+    /// mechanism (`razer_chroma_extended_matrix_set_custom_frame2` in
+    /// OpenRazer) — see [`crate::devices::MatrixProfile`].
+    SetCustomFrame = 0x03,
     SetBrightness = 0x04,
     GetBrightness = 0x84,
 }
@@ -63,6 +67,11 @@ pub enum LedEffect {
     Breathing = 0x02,
     Spectrum = 0x03,
     Wave = 0x04,
+    /// Tells the device to display whatever was most recently written via
+    /// the "custom frame" matrix commands (`SetCustomFrame`), rather than
+    /// a built-in effect. Sent via `LedCommand::SetEffect`, same as every
+    /// other effect id — "custom" is just another effect selection.
+    Custom = 0x08,
 }
 
 /// "Variable storage" flag used throughout the protocol: whether a
