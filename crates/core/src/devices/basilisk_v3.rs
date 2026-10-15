@@ -56,6 +56,18 @@ pub const BASILISK_V3: DeviceProfile = DeviceProfile {
             effect_command_id: LedCommand::SetEffect as u8,
             brightness_command_id: Some(LedCommand::SetBrightness as u8),
         },
+        // The third zone: this mouse's bottom/underglow strip, which
+        // OpenRazer (and this protocol generally) calls "Backlight"
+        // (BACKLIGHT_LED = 0x05 in razercommon.h) — it's the same zone id
+        // the static-effect example in docs/PROTOCOL.md and the
+        // regression test in protocol.rs are built from.
+        LedZoneProfile {
+            id: CommonLedId::Backlight as u8,
+            name: "Underglow",
+            command_class: CommandClass::Led as u8,
+            effect_command_id: LedCommand::SetEffect as u8,
+            brightness_command_id: Some(LedCommand::SetBrightness as u8),
+        },
     ],
     identity: Some(IdentityProfile {
         command_class: CommandClass::General as u8,
