@@ -1,10 +1,20 @@
-# razer-hid-ctl
+<p align="center">
+  <img src="assets/razer-inspired-logo.svg" width="96" height="96" alt="RazerLine logo">
+</p>
 
-An unofficial, open-source control utility for Razer HID peripherals —
+# RazerLine
+
+_(repository: razer-hid-ctl)_
+
+[![CI](https://github.com/amackdev/razer-hid-ctl/actions/workflows/ci.yml/badge.svg)](https://github.com/amackdev/razer-hid-ctl/actions/workflows/ci.yml)
+
+An unofficial, open-source control suite for Razer HID peripherals —
 built so you don't need Razer Synapse installed. Started for the Razer
 Basilisk V3, but structured as a general framework: any device gets
 support by adding one data file describing its capabilities, not by
-forking the whole project.
+forking the whole project. `razerline` is the desktop GUI; `razer-ctl`
+is the scriptable CLI — both built on the same device-agnostic core
+library, so this is meant to scale past one person's one mouse.
 
 **Not affiliated with or endorsed by Razer Inc.** Built from the public
 USB HID protocol reverse-engineered by the [OpenRazer](https://github.com/openrazer/openrazer)
@@ -60,9 +70,11 @@ crates/
   core/   razer-hid-core   — protocol framing, command vocabulary, device
                              registry, generic control logic
   cli/    razer-hid-cli    — `razer-ctl` command-line tool
-  gui/    razer-hid-gui    — `razer-ctl-gui` desktop control panel (egui)
+  gui/    razer-hid-gui    — `razerline` desktop control panel (egui)
+assets/   razer-inspired-logo.svg — original artwork, not Razer's mark
 udev/     Linux udev rule for non-root HID access
 docs/     protocol notes
+.github/workflows/  CI: fmt/clippy/build/test on Linux, Windows, macOS
 ```
 
 The CLI and GUI are both written generically against
@@ -86,7 +98,7 @@ sudo apt install libudev-dev pkg-config libxkbcommon-dev libgtk-3-dev   # Debian
 cargo build --release --workspace
 ```
 
-Binaries land in `target/release/`: `razer-ctl` (CLI) and `razer-ctl-gui`
+Binaries land in `target/release/`: `razer-ctl` (CLI) and `razerline`
 (GUI).
 
 ### Linux device permissions
@@ -125,20 +137,23 @@ razer-ctl matrix row --start 0 FF0000,00FF00,0000FF   # per-LED colors
 razer-ctl --device basilisk dpi 1600
 ```
 
-## Using the GUI
+## Using the GUI (RazerLine)
 
 ```sh
-razer-ctl-gui
+razerline
 ```
 
-A sidebar lists every known device profile with a status dot (connected
-vs. not); the main panel groups controls into cards (Performance,
-Lighting, Device info) that only appear for capabilities the connected
-device's profile actually declares — a device with no RGB zones simply
-has no Lighting card. The Lighting card includes a live animated preview
-of the selected color/effect (including a breathing pulse and a cycling
-spectrum sweep) so you can see roughly what an effect looks like before
-sending it.
+RazerLine polls for connected devices roughly once a second and updates
+live — plug a supported device in and it appears in the sidebar
+automatically, no "Rescan" button, no restart. The sidebar only lists
+devices that are *actually connected* right now, not every profile this
+project happens to support. The main panel groups controls into cards
+(Performance, Lighting, Underglow, Device info) that only appear for
+capabilities the connected device's profile actually declares — a device
+with no RGB zones simply has no Lighting card. The Lighting card includes
+a live animated preview of the selected color/effect (including a
+breathing pulse and a cycling spectrum sweep) so you can see roughly what
+an effect looks like before sending it.
 
 The GUI code is in `crates/gui/src/{app,theme,widgets}.rs` — `theme.rs`
 holds every color constant in one place, `widgets.rs` has the reusable

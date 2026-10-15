@@ -5,10 +5,10 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "Graphical control panel for Razer HID peripherals"
+description = "RazerLine — graphical control panel for Razer HID peripherals"
 
 [[bin]]
-name = "razer-ctl-gui"
+name = "razerline"
 path = "src/main.rs"
 
 [dependencies]

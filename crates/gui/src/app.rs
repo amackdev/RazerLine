@@ -1,14 +1,23 @@
+use std::time::{Duration, Instant};
+
 use eframe::egui;
-use razer_hid_core::devices::{DeviceProfile, LedZoneProfile, KNOWN_DEVICES};
+use razer_hid_core::devices::{DeviceProfile, LedZoneProfile};
 use razer_hid_core::RazerDevice;
 
 use crate::theme;
 use crate::widgets::{self, PreviewKind};
 
+/// How often to actually re-enumerate USB devices. Decoupled from egui's
+/// repaint rate — HID enumeration is cheap but not free, and the UI
+/// doesn't need to re-check more often than a human would notice a mouse
+/// being plugged in.
+const SCAN_INTERVAL: Duration = Duration::from_millis(1000);
+
 pub struct GuiApp {
     device: Option<RazerDevice>,
     connected: Vec<&'static DeviceProfile>,
     active_pid: Option<u16>,
+    last_scan: Instant,
     status: String,
     status_is_error: bool,
 
@@ -31,6 +40,7 @@ impl Default for GuiApp {
             device: None,
             connected: Vec::new(),
             active_pid: None,
+            last_scan: Instant::now(),
             status: "Scanning for devices...".to_string(),
             status_is_error: false,
             dpi_x: 800,
@@ -48,23 +58,33 @@ impl Default for GuiApp {
 }
 
 impl GuiApp {
+    /// Re-enumerates connected devices and reconciles state against what
+    /// was already open — called on a timer from `update()`, not just on
+    /// startup, so plugging/unplugging a device is picked up live without
+    /// the user doing anything. Does **not** reopen the active device's
+    /// handle on every tick: only touches `self.device` when the active
+    /// device actually disappeared or something new needs auto-selecting.
     fn rescan(&mut self) {
-        match RazerDevice::list_connected() {
-            Ok(profiles) if !profiles.is_empty() => {
-                self.connected = profiles;
-                let first = self.connected[0];
-                self.open(first);
-            }
-            Ok(_) => {
-                self.connected.clear();
-                self.device = None;
-                self.active_pid = None;
-                self.set_status("No supported Razer device found", false);
-            }
+        let found = match RazerDevice::list_connected() {
+            Ok(found) => found,
             Err(e) => {
-                self.device = None;
-                self.active_pid = None;
                 self.set_status(format!("Scan error: {e}"), true);
+                return;
+            }
+        };
+
+        let active_still_present = self
+            .active_pid
+            .is_some_and(|pid| found.iter().any(|p| p.product_id == pid));
+
+        self.connected = found;
+
+        if !active_still_present {
+            self.device = None;
+            self.active_pid = None;
+            match self.connected.first().copied() {
+                Some(profile) => self.open(profile),
+                None => self.set_status("No device connected", false),
             }
         }
     }
@@ -108,6 +128,16 @@ impl GuiApp {
 
 impl eframe::App for GuiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Live USB detection: egui only calls update() on input by
+        // default, so request a wakeup even when idle — this is what
+        // makes plugging/unplugging a device show up without the user
+        // touching anything.
+        if self.last_scan.elapsed() >= SCAN_INTERVAL {
+            self.rescan();
+            self.last_scan = Instant::now();
+        }
+        ctx.request_repaint_after(SCAN_INTERVAL);
+
         egui::SidePanel::left("sidebar")
             .resizable(false)
             .exact_width(190.0)
@@ -140,15 +170,29 @@ impl eframe::App for GuiApp {
 
 impl GuiApp {
     fn ui_sidebar(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new("RazerLine")
+                    .strong()
+                    .size(16.0)
+                    .color(theme::ACCENT),
+            );
+        });
+        ui.add_space(14.0);
         ui.label(egui::RichText::new("DEVICES").small().color(theme::MUTED));
         ui.add_space(8.0);
 
+        if self.connected.is_empty() {
+            ui.label(
+                egui::RichText::new("No devices connected")
+                    .small()
+                    .color(theme::MUTED),
+            );
+            return;
+        }
+
         let mut clicked: Option<&'static DeviceProfile> = None;
-        for profile in KNOWN_DEVICES {
-            let is_connected = self
-                .connected
-                .iter()
-                .any(|c| c.product_id == profile.product_id);
+        for profile in self.connected.iter().copied() {
             let is_active = self.active_pid == Some(profile.product_id);
 
             egui::Frame::none()
@@ -162,13 +206,9 @@ impl GuiApp {
                 .show(ui, |ui| {
                     ui.set_width(ui.available_width());
                     ui.horizontal(|ui| {
-                        widgets::status_dot(ui, is_connected);
+                        widgets::status_dot(ui, true);
                         ui.add_space(4.0);
-                        let resp = ui.add_enabled(
-                            is_connected,
-                            egui::SelectableLabel::new(is_active, profile.name),
-                        );
-                        if resp.clicked() {
+                        if ui.selectable_label(is_active, profile.name).clicked() {
                             clicked = Some(profile);
                         }
                     });
@@ -179,11 +219,6 @@ impl GuiApp {
             if self.active_pid != Some(profile.product_id) {
                 self.open(profile);
             }
-        }
-
-        ui.add_space(16.0);
-        if ui.button("Rescan").clicked() {
-            self.rescan();
         }
     }
 
@@ -199,7 +234,7 @@ impl GuiApp {
     }
 
     fn ui_content(&mut self, ui: &mut egui::Ui) {
-        let Some(active_pid) = self.active_pid else {
+        let Some(profile) = self.device.as_ref().map(|d| d.profile) else {
             ui.add_space(40.0);
             ui.vertical_centered(|ui| {
                 ui.label(
@@ -208,14 +243,13 @@ impl GuiApp {
                         .color(theme::MUTED),
                 );
                 ui.label(
-                    egui::RichText::new("Plug in a supported Razer device and hit Rescan.")
-                        .small()
-                        .color(theme::MUTED),
+                    egui::RichText::new(
+                        "Plug in a supported Razer device — it'll show up here automatically.",
+                    )
+                    .small()
+                    .color(theme::MUTED),
                 );
             });
-            return;
-        };
-        let Some(profile) = KNOWN_DEVICES.iter().find(|p| p.product_id == active_pid) else {
             return;
         };
 
@@ -444,12 +478,17 @@ impl GuiApp {
 }
 
 pub fn run() -> eframe::Result<()> {
+    let icon = eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png"))
+        .expect("bundled icon.png is a valid PNG — generated from assets/razer-inspired-logo.svg");
+
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([620.0, 680.0]),
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([620.0, 680.0])
+            .with_icon(icon),
         ..Default::default()
     };
     eframe::run_native(
-        "Razer HID Control",
+        "RazerLine",
         options,
         Box::new(|cc| {
             theme::apply(&cc.egui_ctx);

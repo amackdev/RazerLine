@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a1b1f"/>
+      <stop offset="100%" stop-color="#0c0d10"/>
+    </linearGradient>
+    <linearGradient id="body" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#34363c"/>
+      <stop offset="100%" stop-color="#202226"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- app-icon background -->
+  <rect x="0" y="0" width="256" height="256" rx="48" fill="url(#bg)"/>
+
+  <!-- mouse body (top-down silhouette) -->
+  <path d="M 128 44
+           C 90 44 66 70 62 108
+           L 58 160
+           C 56 196 84 220 128 220
+           C 172 220 200 196 198 160
+           L 194 108
+           C 190 70 166 44 128 44 Z"
+        fill="url(#body)" stroke="#404349" stroke-width="2"/>
+
+  <!-- left/right button split -->
+  <line x1="128" y1="46" x2="128" y2="96" stroke="#101114" stroke-width="3"/>
+
+  <!-- scroll wheel, lit -->
+  <rect x="118" y="66" width="20" height="34" rx="10"
+        fill="#40d180" filter="url(#glow)"/>
+
+  <!-- underglow strip -->
+  <rect x="78" y="206" width="100" height="8" rx="4"
+        fill="#40d180" opacity="0.9" filter="url(#glow)"/>
+</svg>

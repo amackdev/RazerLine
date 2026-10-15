@@ -1,0 +1,74 @@
+name: Release
+
+# Builds and attaches platform binaries to a GitHub Release whenever a
+# version tag (v1.2.3) is pushed. Doesn't publish to crates.io — this is
+# an end-user application, not a library other crates are meant to depend
+# on; see CONTRIBUTING.md if that changes.
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive_ext: tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive_ext: zip
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            archive_ext: tar.gz
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libudev-dev pkg-config libxkbcommon-dev libgtk-3-dev
+      - name: Build
+        run: cargo build --workspace --release --target ${{ matrix.target }}
+
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="razerline-${{ github.ref_name }}-${{ matrix.target }}"
+          mkdir -p "$stage"
+          cp target/${{ matrix.target }}/release/razer-ctl "$stage/"
+          cp target/${{ matrix.target }}/release/razerline "$stage/"
+          cp README.md LICENSE "$stage/"
+          [ -d udev ] && cp -r udev "$stage/"
+          tar czf "$stage.tar.gz" "$stage"
+          echo "ASSET=$stage.tar.gz" >> "$GITHUB_ENV"
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $stage = "razerline-${{ github.ref_name }}-${{ matrix.target }}"
+          New-Item -ItemType Directory -Path $stage | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/razer-ctl.exe" $stage/
+          Copy-Item "target/${{ matrix.target }}/release/razerline.exe" $stage/
+          Copy-Item README.md, LICENSE $stage/
+          Compress-Archive -Path $stage -DestinationPath "$stage.zip"
+          echo "ASSET=$stage.zip" >> $env:GITHUB_ENV
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ASSET }}
