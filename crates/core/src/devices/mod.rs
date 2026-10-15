@@ -19,6 +19,7 @@ mod abyssus_v2;
 mod basilisk;
 mod basilisk_essential;
 mod basilisk_mobile_wired;
+mod basilisk_ultimate_wired;
 
 pub use basilisk_v3::BASILISK_V3;
 pub use viper_ultimate::{VIPER_ULTIMATE_WIRED, VIPER_ULTIMATE_WIRELESS};
@@ -29,6 +30,7 @@ pub use abyssus_v2::ABYSSUS_V2;
 pub use basilisk::BASILISK;
 pub use basilisk_essential::BASILISK_ESSENTIAL;
 pub use basilisk_mobile_wired::BASILISK_MOBILE_WIRED;
+pub use basilisk_ultimate_wired::BASILISK_ULTIMATE_WIRED;
 
 /// The broad category of peripheral. Currently only `Mouse` capabilities
 /// (DPI, polling rate, two-zone RGB) are modeled end to end; keyboards and
@@ -150,7 +152,7 @@ pub enum Confidence {
 }
 
 pub const KNOWN_DEVICES: &[DeviceProfile] =
-    &[BASILISK_V3, VIPER_ULTIMATE_WIRED, VIPER_ULTIMATE_WIRELESS, ABYSSUS_2000, ABYSSUS_ELITE_DVA_EDITION, ABYSSUS_ESSENTIAL, ABYSSUS_V2, BASILISK, BASILISK_ESSENTIAL, BASILISK_MOBILE_WIRED];
+    &[BASILISK_V3, VIPER_ULTIMATE_WIRED, VIPER_ULTIMATE_WIRELESS, ABYSSUS_2000, ABYSSUS_ELITE_DVA_EDITION, ABYSSUS_ESSENTIAL, ABYSSUS_V2, BASILISK, BASILISK_ESSENTIAL, BASILISK_MOBILE_WIRED, BASILISK_ULTIMATE_WIRED];
 
 pub fn find_by_pid(vendor_id: u16, product_id: u16) -> Option<&'static DeviceProfile> {
     KNOWN_DEVICES
