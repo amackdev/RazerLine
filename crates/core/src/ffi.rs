@@ -308,6 +308,13 @@ fn dispatch(
         Op::SetMatrixRow => {
             let row = input[0];
             let start_col = input[1];
+            // `as_chunks` (clippy's suggested replacement) is still
+            // unstable on some toolchains this needs to build with —
+            // keep `chunks_exact` and silence the lint instead. The
+            // lint itself doesn't exist on older clippy, hence
+            // `unknown_lints` too.
+            #[allow(unknown_lints)]
+            #[allow(clippy::chunks_exact_to_as_chunks)]
             let colors: Vec<[u8; 3]> = input[2..]
                 .chunks_exact(3)
                 .map(|c| [c[0], c[1], c[2]])
