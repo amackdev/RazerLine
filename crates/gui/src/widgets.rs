@@ -24,7 +24,7 @@ pub fn color_swatch(ui: &mut Ui, rgb: [u8; 3], size: f32) {
     ui.painter().rect_stroke(
         rect,
         4.0,
-        egui::Stroke::new(1.0, Color32::from_white_alpha(40)),
+        egui::Stroke::new(1.0_f32, Color32::from_white_alpha(40)),
     );
 }
 
