@@ -1,10 +1,14 @@
 //! Device profile for the Razer Basilisk V3 (wired).
 //!
-//! Confidence: **unverified against hardware by the maintainers of this
-//! repo** — these are the standard mouse command bytes documented by the
-//! OpenRazer project, applied to this model's VID/PID. If you own this
-//! mouse and these work (or don't), please say so in an issue/PR; see
-//! `docs/PROTOCOL.md` for how to confirm with a USB capture.
+//! Confidence: the command classes/ids/argument layouts below were
+//! cross-checked line-by-line against the OpenRazer kernel driver source
+//! (`driver/razermouse_driver.c` and `razerchromacommon.c`, GPL-3.0),
+//! which explicitly lists `USB_DEVICE_ID_RAZER_BASILISK_V3` for each of
+//! these code paths — this isn't "standard mouse bytes applied on spec,"
+//! it's the exact bytes OpenRazer's Linux driver sends to this model.
+//! Still marked `Unverified` here because no maintainer of *this* repo
+//! has run it against real hardware yet. If you have, please say so (and
+//! what did/didn't work) in an issue — see `docs/PROTOCOL.md`.
 
 use super::{
     Confidence, DeviceKind, DeviceProfile, DpiProfile, IdentityProfile, LedZoneProfile,
@@ -25,8 +29,12 @@ pub const BASILISK_V3: DeviceProfile = DeviceProfile {
         command_class: CommandClass::Mouse as u8,
         set_command_id: MouseCommand::SetDpiXY as u8,
         get_command_id: MouseCommand::GetDpiXY as u8,
-        min: 50,
-        max: 26000,
+        // OpenRazer clamps the raw protocol value to 100-45000 for every
+        // device that takes this command shape; the sensor's actual
+        // practical ceiling is lower, but this matches what the firmware
+        // itself will accept without silently reinterpreting the bytes.
+        min: 100,
+        max: 45000,
     }),
     poll_rate: Some(PollRateProfile {
         command_class: CommandClass::General as u8,

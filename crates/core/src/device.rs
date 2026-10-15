@@ -2,6 +2,7 @@
 //! being hardcoded to one model. Every supported peripheral goes through
 //! this same code path.
 
+use std::ffi::CString;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -29,6 +30,13 @@ pub enum DeviceError {
     OutOfRange(String),
     #[error("{0} is not supported by {1}")]
     Unsupported(&'static str, &'static str),
+    #[error(
+        "found {0} matching USB interface(s) for {1}, but none of them accepted a feature \
+         report (last error: {2}). Run `razer-ctl debug-usb` and compare against docs/PROTOCOL.md \
+         — on Windows in particular, the plain mouse/keyboard interface rejects Set/GetFeature \
+         and only a separate vendor-control interface accepts it."
+    )]
+    NoWorkingInterface(usize, &'static str, Box<DeviceError>),
 }
 
 pub struct DpiSetting {
@@ -36,9 +44,43 @@ pub struct DpiSetting {
     pub y: u16,
 }
 
+/// Raw info about one HID interface, for diagnosing which one a device's
+/// control traffic actually lives on (`razer-ctl debug-usb`).
+#[derive(Debug, Clone)]
+pub struct InterfaceInfo {
+    pub vendor_id: u16,
+    pub product_id: u16,
+    pub interface_number: i32,
+    pub usage_page: u16,
+    pub usage: u16,
+    pub product_string: Option<String>,
+    pub path: String,
+}
+
 pub struct RazerDevice {
     hid: HidDevice,
     pub profile: &'static DeviceProfile,
+}
+
+/// Builds a harmless, read-only report to test whether an interface
+/// accepts Set/GetFeature at all. Prefers the firmware-version query
+/// (profiles that have one will get a genuinely meaningful response);
+/// falls back to a DPI query, then to an all-zero report purely to
+/// exercise the transport if the profile declares neither.
+fn probe_report(profile: &DeviceProfile) -> RazerReport {
+    if let Some(identity) = profile.identity {
+        RazerReport::new(
+            identity.command_class,
+            identity.firmware_command_id,
+            vec![0u8; 2],
+        )
+        .expect("2-byte probe args never exceed ARGS_LENGTH")
+    } else if let Some(dpi) = profile.dpi {
+        RazerReport::new(dpi.command_class, dpi.get_command_id, vec![0u8; 7])
+            .expect("7-byte probe args never exceed ARGS_LENGTH")
+    } else {
+        RazerReport::new(0x00, 0x00, Vec::new()).expect("empty probe args never exceed ARGS_LENGTH")
+    }
 }
 
 impl RazerDevice {
@@ -65,19 +107,77 @@ impl RazerDevice {
     }
 
     /// Opens a specific known profile; errors if that model isn't plugged in.
+    ///
+    /// A Razer peripheral enumerates as *several* HID interfaces (e.g. one
+    /// plain input collection for cursor/key events, one vendor-defined
+    /// collection for control commands). Which one accepts Set/GetFeature
+    /// calls varies by platform and device — notably, Windows refuses
+    /// direct Feature-report I/O on collections it treats as the system
+    /// mouse/keyboard, so guessing by usage page alone is not reliable.
+    /// Instead, every matching interface is tried in turn with a harmless
+    /// probe report; whichever one actually accepts it is used.
     pub fn open(profile: &'static DeviceProfile) -> Result<Self, DeviceError> {
         let api = HidApi::new()?;
 
-        let info = api
+        // Prefer interfaces that look vendor-defined (usage page 0xFF00 is
+        // the most common convention for Razer's control collection), but
+        // still try every match — this ranking is just to avoid
+        // unnecessary probe attempts, not a hard requirement.
+        let mut candidates: Vec<(CString, bool)> = api
             .device_list()
             .filter(|d| d.vendor_id() == profile.vendor_id && d.product_id() == profile.product_id)
-            // Prefer the vendor-defined control collection over the plain
-            // input/cursor interface, when the backend reports usage pages.
-            .max_by_key(|d| u16::from(d.usage_page() == 0xFF00))
-            .ok_or(DeviceError::NotConnected(profile.product_id))?;
+            .map(|d| (d.path().to_owned(), d.usage_page() == 0xFF00))
+            .collect();
 
-        let hid = info.open_device(&api)?;
-        Ok(Self { hid, profile })
+        if candidates.is_empty() {
+            return Err(DeviceError::NotConnected(profile.product_id));
+        }
+        candidates.sort_by_key(|(_, looks_vendor)| !looks_vendor);
+
+        let probe = probe_report(profile).pack();
+        let attempted = candidates.len();
+        let mut last_err: Option<DeviceError> = None;
+
+        for (path, _) in candidates {
+            let hid = match api.open_path(&path) {
+                Ok(hid) => hid,
+                Err(e) => {
+                    last_err = Some(e.into());
+                    continue;
+                }
+            };
+            match hid.send_feature_report(&probe) {
+                Ok(_) => return Ok(Self { hid, profile }),
+                Err(e) => last_err = Some(e.into()),
+            }
+        }
+
+        Err(DeviceError::NoWorkingInterface(
+            attempted,
+            profile.name,
+            Box::new(last_err.unwrap_or(DeviceError::NotConnected(profile.product_id))),
+        ))
+    }
+
+    /// Lists every HID interface on the system under the given vendor id,
+    /// without filtering to known profiles — useful for figuring out which
+    /// interface a new or misbehaving device's control traffic lives on.
+    /// See `docs/PROTOCOL.md` / `CONTRIBUTING.md`.
+    pub fn debug_list_interfaces(vendor_id: u16) -> Result<Vec<InterfaceInfo>, DeviceError> {
+        let api = HidApi::new()?;
+        Ok(api
+            .device_list()
+            .filter(|d| d.vendor_id() == vendor_id)
+            .map(|d| InterfaceInfo {
+                vendor_id: d.vendor_id(),
+                product_id: d.product_id(),
+                interface_number: d.interface_number(),
+                usage_page: d.usage_page(),
+                usage: d.usage(),
+                product_string: d.product_string().map(|s| s.to_string()),
+                path: d.path().to_string_lossy().into_owned(),
+            })
+            .collect())
     }
 
     fn transact(&self, report: &RazerReport) -> Result<RazerReport, DeviceError> {
@@ -107,6 +207,11 @@ impl RazerDevice {
 
     // -- DPI -----------------------------------------------------------
 
+    /// `razer_chroma_misc_set_dpi_xy` always sends `Storage::Variable`
+    /// regardless of what's asked for (OpenRazer's own implementation
+    /// ignores its `variable_storage` parameter here) — replicated as-is
+    /// since that's what the firmware actually receives from the
+    /// reference driver.
     pub fn set_dpi(&self, x: u16, y: u16) -> Result<(), DeviceError> {
         let dpi = self
             .profile
@@ -121,11 +226,13 @@ impl RazerDevice {
             }
         }
         let args = vec![
-            0x00, // dpi stage, 0 = active profile
+            crate::commands::Storage::Variable as u8,
             (x >> 8) as u8,
             (x & 0xFF) as u8,
             (y >> 8) as u8,
             (y & 0xFF) as u8,
+            0x00,
+            0x00,
         ];
         let report = RazerReport::new(dpi.command_class, dpi.set_command_id, args)?;
         self.transact(&report)?;
@@ -137,7 +244,8 @@ impl RazerDevice {
             .profile
             .dpi
             .ok_or(DeviceError::Unsupported("DPI", self.profile.name))?;
-        let report = RazerReport::new(dpi.command_class, dpi.get_command_id, vec![0u8; 5])?;
+        let args = vec![crate::commands::Storage::None as u8, 0, 0, 0, 0, 0, 0];
+        let report = RazerReport::new(dpi.command_class, dpi.get_command_id, args)?;
         let resp = self.transact(&report)?;
         let a = &resp.arguments;
         Ok(DpiSetting {
@@ -176,12 +284,21 @@ impl RazerDevice {
         self.profile.leds
     }
 
+    // Argument layout for every extended-matrix effect follows
+    // `razer_chroma_extended_matrix_effect_base` in OpenRazer: byte 0 is
+    // always `Storage::Variable`, byte 1 the LED zone id, byte 2 the
+    // effect id — then effect-specific bytes at fixed offsets (not
+    // necessarily packed immediately after the header; there are
+    // deliberate zero gaps that match what the firmware expects).
+
     pub fn set_led_off(&self, zone: &LedZoneProfile) -> Result<(), DeviceError> {
-        self.set_led_effect(zone, crate::commands::LedEffect::Off, &[])
+        self.send_led_effect(zone, crate::commands::LedEffect::Off, &[0; 3])
     }
 
     pub fn set_led_static(&self, zone: &LedZoneProfile, rgb: [u8; 3]) -> Result<(), DeviceError> {
-        self.set_led_effect(zone, crate::commands::LedEffect::Static, &rgb)
+        // args[3..5] = 0, args[5] = 0x01, args[6..8] = rgb
+        let tail = [0x00, 0x00, 0x01, rgb[0], rgb[1], rgb[2]];
+        self.send_led_effect(zone, crate::commands::LedEffect::Static, &tail)
     }
 
     pub fn set_led_breathing(
@@ -189,26 +306,38 @@ impl RazerDevice {
         zone: &LedZoneProfile,
         rgb: [u8; 3],
     ) -> Result<(), DeviceError> {
-        let args = [0x01, rgb[0], rgb[1], rgb[2]];
-        self.set_led_effect(zone, crate::commands::LedEffect::Breathing, &args)
+        // args[3] = 0x01 (one color), args[4] = 0, args[5] = 0x01, args[6..8] = rgb
+        let tail = [0x01, 0x00, 0x01, rgb[0], rgb[1], rgb[2]];
+        self.send_led_effect(zone, crate::commands::LedEffect::Breathing, &tail)
     }
 
     pub fn set_led_spectrum(&self, zone: &LedZoneProfile) -> Result<(), DeviceError> {
-        self.set_led_effect(zone, crate::commands::LedEffect::Spectrum, &[])
+        self.send_led_effect(zone, crate::commands::LedEffect::Spectrum, &[0; 3])
     }
 
     pub fn set_led_wave(&self, zone: &LedZoneProfile, direction: u8) -> Result<(), DeviceError> {
-        self.set_led_effect(zone, crate::commands::LedEffect::Wave, &[direction])
+        // args[3] = direction (0-2), args[4] = speed (0x28 is OpenRazer's
+        // fixed default — lower is faster), args[5] = 0
+        let direction = direction.min(2);
+        let tail = [direction, 0x28, 0x00];
+        self.send_led_effect(zone, crate::commands::LedEffect::Wave, &tail)
     }
 
-    fn set_led_effect(
+    /// `tail` is always exactly 3 or 6 bytes: the args *after* the 3-byte
+    /// [storage, led_id, effect_id] header, giving a 6- or 9-byte report
+    /// matching OpenRazer's `arg_size` for that effect.
+    fn send_led_effect(
         &self,
         zone: &LedZoneProfile,
         effect: crate::commands::LedEffect,
-        extra: &[u8],
+        tail: &[u8],
     ) -> Result<(), DeviceError> {
-        let mut args = vec![zone.id, effect as u8];
-        args.extend_from_slice(extra);
+        let mut args = vec![
+            crate::commands::Storage::Variable as u8,
+            zone.id,
+            effect as u8,
+        ];
+        args.extend_from_slice(tail);
         let report = RazerReport::new(zone.command_class, zone.effect_command_id, args)?;
         self.transact(&report)?;
         Ok(())
@@ -227,7 +356,8 @@ impl RazerDevice {
             return Err(DeviceError::OutOfRange("brightness must be 0-100".into()));
         }
         let value = ((percent as u16) * 255 / 100) as u8;
-        let report = RazerReport::new(zone.command_class, cmd_id, vec![zone.id, value])?;
+        let args = vec![crate::commands::Storage::Variable as u8, zone.id, value];
+        let report = RazerReport::new(zone.command_class, cmd_id, args)?;
         self.transact(&report)?;
         Ok(())
     }
@@ -256,7 +386,7 @@ impl RazerDevice {
         let report = RazerReport::new(
             identity.command_class,
             identity.serial_command_id,
-            vec![0u8; 20],
+            vec![0u8; 22],
         )?;
         let resp = self.transact(&report)?;
         let end = resp

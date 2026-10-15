@@ -1,12 +1,10 @@
 //! Shared command-class/command-id vocabulary for Razer's HID control
-//! protocol, as reverse-engineered by the OpenRazer community (GPL-3.0)
-//! and widely re-confirmed across many Razer mice.
-//!
-//! These values are a *starting point* for writing a new device profile
-//! under [`crate::devices`], not a guarantee that any specific model uses
-//! them. A surprising number of Razer mice do share these exact bytes, but
-//! always verify against your own hardware with a USB capture before
-//! trusting a new profile — see `docs/PROTOCOL.md`.
+//! protocol, cross-checked against the OpenRazer kernel driver source
+//! (`driver/razerchromacommon.c`, GPL-3.0) rather than guessed — see
+//! `docs/PROTOCOL.md` for how that source maps to this module and the
+//! `devices/*.rs` profiles. Still verify against your own hardware before
+//! trusting a *new* profile built from these: OpenRazer confirms these
+//! bytes work for the specific models it lists, not for every Razer mouse.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -40,25 +38,43 @@ pub enum LedCommand {
     GetBrightness = 0x84,
 }
 
-/// Common LED zone ids. A device profile is free to define its own zone
-/// ids instead (see [`crate::devices::LedZoneProfile`]) if its firmware
-/// numbers them differently.
+/// Common LED zone ids (`razercommon.h`'s `*_LED` defines). A device
+/// profile is free to define its own zone ids instead (see
+/// [`crate::devices::LedZoneProfile`]) if its firmware numbers them
+/// differently.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum CommonLedId {
+    Zero = 0x00,
     ScrollWheel = 0x01,
     Logo = 0x04,
-    Backlight = 0x00,
+    Backlight = 0x05,
 }
 
+/// Effect ids used by the "extended matrix" LED command
+/// (`razer_chroma_extended_matrix_effect_*` in `razerchromacommon.c`).
+/// Note the ordering is *not* sequential with "obvious" guesses — e.g.
+/// Spectrum is 0x03 and Wave is 0x04, not the other way around.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum LedEffect {
     Off = 0x00,
     Static = 0x01,
     Breathing = 0x02,
-    Wave = 0x03,
-    Spectrum = 0x04,
+    Spectrum = 0x03,
+    Wave = 0x04,
+}
+
+/// "Variable storage" flag used throughout the protocol: whether a
+/// setting should persist in the device's onboard memory (`Variable`) or
+/// only apply to the current session (`None`). Most modern mice ignore
+/// this for some commands (e.g. DPI set always uses `Variable` in
+/// practice) and respect it for others — see the specific device profile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Storage {
+    None = 0x00,
+    Variable = 0x01,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

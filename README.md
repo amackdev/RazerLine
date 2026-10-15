@@ -90,6 +90,7 @@ sudo usermod -aG plugdev $USER   # log out/in afterwards
 
 ```sh
 razer-ctl list-devices                 # known profiles + connection status
+razer-ctl debug-usb                    # dump raw HID interfaces if `open` can't find a working one
 razer-ctl info                         # firmware/serial of the connected device
 razer-ctl list-leds                    # LED zone names this device exposes
 razer-ctl dpi 1600                     # DPI X=Y=1600

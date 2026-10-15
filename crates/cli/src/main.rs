@@ -21,6 +21,10 @@ struct Cli {
 enum Command {
     /// List known device profiles and which of them are currently connected.
     ListDevices,
+    /// Dump every raw HID interface under Razer's vendor id (0x1532),
+    /// regardless of whether it's a known profile. Use this to figure out
+    /// why `open` can't find a working control interface for your device.
+    DebugUsb,
     /// Show firmware version and serial number of the selected device.
     Info,
     /// List the LED zones the selected device exposes.
@@ -120,8 +124,10 @@ fn main() {
 }
 
 fn run(cli: Cli) -> Result<(), String> {
-    if let Command::ListDevices = cli.command {
-        return list_devices();
+    match cli.command {
+        Command::ListDevices => return list_devices(),
+        Command::DebugUsb => return debug_usb(),
+        _ => {}
     }
 
     let profile = select_profile(cli.device.as_deref())?;
@@ -129,7 +135,7 @@ fn run(cli: Cli) -> Result<(), String> {
     println!("Using {}", profile.name);
 
     match cli.command {
-        Command::ListDevices => unreachable!(),
+        Command::ListDevices | Command::DebugUsb => unreachable!(),
         Command::Info => {
             println!(
                 "Firmware: {}",
@@ -165,6 +171,22 @@ fn list_devices() -> Result<(), String> {
             "not connected"
         };
         println!("{} [{:?}] - {}", profile.name, profile.confidence, status);
+    }
+    Ok(())
+}
+
+fn debug_usb() -> Result<(), String> {
+    let interfaces = RazerDevice::debug_list_interfaces(razer_hid_core::constants::RAZER_VENDOR_ID)
+        .map_err(|e| e.to_string())?;
+    if interfaces.is_empty() {
+        println!("No HID interfaces found under vendor id 0x1532 (Razer). Is anything plugged in?");
+        return Ok(());
+    }
+    for i in interfaces {
+        println!(
+            "pid=0x{:04x} iface={} usage_page=0x{:04x} usage=0x{:04x} product={:?}\n  path={}",
+            i.product_id, i.interface_number, i.usage_page, i.usage, i.product_string, i.path
+        );
     }
     Ok(())
 }
