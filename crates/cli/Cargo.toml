@@ -1,0 +1,16 @@
+[package]
+name = "razer-hid-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Command-line control utility for Razer HID peripherals"
+
+[[bin]]
+name = "razer-ctl"
+path = "src/main.rs"
+
+[dependencies]
+razer-hid-core = { path = "../core" }
+clap.workspace = true

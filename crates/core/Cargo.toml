@@ -1,0 +1,12 @@
+[package]
+name = "razer-hid-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Unofficial HID protocol + multi-device control library for Razer peripherals"
+
+[dependencies]
+hidapi.workspace = true
+thiserror.workspace = true

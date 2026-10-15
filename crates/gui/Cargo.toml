@@ -1,0 +1,16 @@
+[package]
+name = "razer-hid-gui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Graphical control panel for Razer HID peripherals"
+
+[[bin]]
+name = "razer-ctl-gui"
+path = "src/main.rs"
+
+[dependencies]
+razer-hid-core = { path = "../core" }
+eframe = "0.28"
