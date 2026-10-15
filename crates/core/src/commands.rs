@@ -52,6 +52,8 @@ pub enum CommonLedId {
     ScrollWheel = 0x01,
     Logo = 0x04,
     Backlight = 0x05,
+    RightSide = 0x10,
+    LeftSide = 0x11,
 }
 
 /// Effect ids used by the "extended matrix" LED command
