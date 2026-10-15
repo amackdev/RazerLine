@@ -156,6 +156,44 @@ impl GuiApp {
             Some(msg) => self.set_status(msg, true),
         }
     }
+
+    /// Like [`apply_to_zones`](Self::apply_to_zones), but when "All zones"
+    /// is active and the device has an underglow/matrix capability, also
+    /// runs `matrix_f` against it so Underglow doesn't sit outside the
+    /// sync — Synapse treats it as just another zone for actions it can
+    /// actually do (a solid color, or off). Only called when `sync_zones`
+    /// is true; in per-zone mode Underglow has its own card/controls.
+    fn apply_to_zones_and_matrix(
+        &mut self,
+        zones: &'static [LedZoneProfile],
+        selected_idx: usize,
+        mut zone_f: impl FnMut(&RazerDevice, &LedZoneProfile) -> Result<(), razer_hid_core::DeviceError>,
+        matrix_f: impl FnOnce(&RazerDevice) -> Result<(), razer_hid_core::DeviceError>,
+        has_matrix: bool,
+        ok_msg: &str,
+    ) {
+        let targets: &[LedZoneProfile] = if self.sync_zones {
+            zones
+        } else {
+            &zones[selected_idx..=selected_idx]
+        };
+        let dev = self.device.as_ref().unwrap();
+        let mut failure = None;
+        for zone in targets {
+            if let Err(e) = zone_f(dev, zone) {
+                failure.get_or_insert_with(|| format!("{} failed: {e}", zone.name));
+            }
+        }
+        if self.sync_zones && has_matrix {
+            if let Err(e) = matrix_f(dev) {
+                failure.get_or_insert_with(|| format!("Underglow failed: {e}"));
+            }
+        }
+        match failure {
+            None => self.set_status(ok_msg, false),
+            Some(msg) => self.set_status(msg, true),
+        }
+    }
 }
 
 impl eframe::App for GuiApp {
@@ -371,7 +409,9 @@ impl GuiApp {
             let zones = profile.leds;
             let zone_idx = self.selected_zone_idx.min(zones.len() - 1);
 
-            if zones.len() > 1 {
+            let has_matrix = profile.matrix.is_some();
+
+            if zones.len() > 1 || has_matrix {
                 ui.horizontal(|ui| {
                     ui.selectable_value(&mut self.sync_zones, true, "All zones");
                     ui.selectable_value(&mut self.sync_zones, false, "Individually");
@@ -379,15 +419,27 @@ impl GuiApp {
                 ui.add_space(6.0);
 
                 if !self.sync_zones {
-                    egui::ComboBox::from_label("Zone")
-                        .selected_text(zones[zone_idx].name)
-                        .show_ui(ui, |ui| {
-                            for (i, z) in zones.iter().enumerate() {
-                                ui.selectable_value(&mut self.selected_zone_idx, i, z.name);
-                            }
-                        });
+                    if zones.len() > 1 {
+                        egui::ComboBox::from_label("Zone")
+                            .selected_text(zones[zone_idx].name)
+                            .show_ui(ui, |ui| {
+                                for (i, z) in zones.iter().enumerate() {
+                                    ui.selectable_value(&mut self.selected_zone_idx, i, z.name);
+                                }
+                            });
+                    }
+                    if has_matrix {
+                        ui.label(
+                            egui::RichText::new("Underglow has its own card below in this mode.")
+                                .small()
+                                .color(theme::MUTED),
+                        );
+                    }
                 } else {
-                    let names: Vec<_> = zones.iter().map(|z| z.name).collect();
+                    let mut names: Vec<_> = zones.iter().map(|z| z.name).collect();
+                    if has_matrix {
+                        names.push("Underglow (color/off only)");
+                    }
                     ui.label(
                         egui::RichText::new(format!("Applies to: {}", names.join(", ")))
                             .small()
@@ -416,10 +468,12 @@ impl GuiApp {
                 if ui.button("Static").clicked() {
                     let color = self.led_color;
                     self.last_preview = PreviewKind::Static;
-                    self.apply_to_zones(
+                    self.apply_to_zones_and_matrix(
                         zones,
                         zone_idx,
                         |dev, zone| dev.set_led_static(zone, color),
+                        |dev| dev.fill_matrix(color),
+                        has_matrix,
                         "LED set to static color",
                     );
                 }
@@ -453,10 +507,12 @@ impl GuiApp {
                 }
                 if ui.button("Off").clicked() {
                     self.last_preview = PreviewKind::Off;
-                    self.apply_to_zones(
+                    self.apply_to_zones_and_matrix(
                         zones,
                         zone_idx,
                         |dev, zone| dev.set_led_off(zone),
+                        |dev| dev.fill_matrix([0, 0, 0]),
+                        has_matrix,
                         "LED off",
                     );
                 }
@@ -467,6 +523,15 @@ impl GuiApp {
                     .small()
                     .color(theme::MUTED),
             );
+            if self.sync_zones && has_matrix {
+                ui.label(
+                    egui::RichText::new(
+                        "Underglow only supports a solid color or off — Breathing/Spectrum/Wave don't reach it.",
+                    )
+                    .small()
+                    .color(theme::MUTED),
+                );
+            }
 
             if any_brightness {
                 ui.add_space(10.0);
@@ -500,6 +565,17 @@ impl GuiApp {
                     .small()
                     .color(theme::MUTED),
             );
+            if self.sync_zones {
+                ui.label(
+                    egui::RichText::new(
+                        "Lighting is set to \"All zones\" — Static/Off up there already \
+                         include this. Use the controls below for a different underglow \
+                         color, or switch Lighting to \"Individually\".",
+                    )
+                    .small()
+                    .color(theme::MUTED),
+                );
+            }
             ui.add_space(6.0);
 
             widgets::effect_preview(ui, PreviewKind::Static, self.matrix_color, 0.0);
