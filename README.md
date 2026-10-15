@@ -112,9 +112,20 @@ razer-ctl --device basilisk dpi 1600
 razer-ctl-gui
 ```
 
-It scans for any connected, known device on launch, and shows only the
-tabs/controls that device's profile declares (e.g. no lighting section for
-a device with no RGB zones).
+A sidebar lists every known device profile with a status dot (connected
+vs. not); the main panel groups controls into cards (Performance,
+Lighting, Device info) that only appear for capabilities the connected
+device's profile actually declares — a device with no RGB zones simply
+has no Lighting card. The Lighting card includes a live animated preview
+of the selected color/effect (including a breathing pulse and a cycling
+spectrum sweep) so you can see roughly what an effect looks like before
+sending it.
+
+The GUI code is in `crates/gui/src/{app,theme,widgets}.rs` — `theme.rs`
+holds every color constant in one place, `widgets.rs` has the reusable
+pieces (status dot, color swatch, card frame, effect preview), and
+`app.rs` wires them together. Swap `theme.rs`'s constants to re-skin it
+without touching layout code.
 
 ## Adding support for your device
 
