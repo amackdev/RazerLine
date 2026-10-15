@@ -1,10 +1,9 @@
 //! Shared command-class/command-id vocabulary for Razer's HID control
 //! protocol, cross-checked against the OpenRazer kernel driver source
-//! (`driver/razerchromacommon.c`, GPL-3.0) rather than guessed — see
-//! `docs/PROTOCOL.md` for how that source maps to this module and the
-//! `devices/*.rs` profiles. Still verify against your own hardware before
-//! trusting a *new* profile built from these: OpenRazer confirms these
-//! bytes work for the specific models it lists, not for every Razer mouse.
+//! (`driver/razerchromacommon.c`, GPL-3.0) rather than guessed. Still
+//! verify against your own hardware before trusting a *new* profile
+//! built from these: OpenRazer confirms these bytes work for the
+//! specific models it lists, not for every Razer mouse.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]

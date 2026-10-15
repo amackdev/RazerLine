@@ -5,8 +5,8 @@
 //! and daemon metadata (`daemon/openrazer_daemon/hardware/mouse.py`,
 //! `RazerViperUltimateWired`/`RazerViperUltimateWireless`), the same way
 //! as `basilisk_v3.rs` — but **not yet run against real hardware by any
-//! maintainer of this repo**. If you own one, please report back (see
-//! `docs/PROTOCOL.md`).
+//! maintainer of this repo**. If you own one, please open an issue or PR
+//! with what did/didn't work.
 //!
 //! Unlike the Basilisk V3, this device does **not** use one uniform
 //! transaction id: OpenRazer sends DPI/poll-rate/firmware/serial with

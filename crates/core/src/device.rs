@@ -38,9 +38,9 @@ pub enum DeviceError {
     Unsupported(&'static str, &'static str),
     #[error(
         "found {0} matching USB interface(s) for {1}, but none of them accepted a feature \
-         report (last error: {2}). Run `razer-ctl debug-usb` and compare against docs/PROTOCOL.md \
-         — on Windows in particular, the plain mouse/keyboard interface rejects Set/GetFeature \
-         and only a separate vendor-control interface accepts it."
+         report (last error: {2}). Run `razer-ctl debug-usb` to see every raw interface — on \
+         Windows in particular, the plain mouse/keyboard interface rejects Set/GetFeature and \
+         only a separate vendor-control interface accepts it."
     )]
     NoWorkingInterface(usize, &'static str, Box<DeviceError>),
 }
@@ -172,7 +172,6 @@ impl RazerDevice {
     /// Lists every HID interface on the system under the given vendor id,
     /// without filtering to known profiles — useful for figuring out which
     /// interface a new or misbehaving device's control traffic lives on.
-    /// See `docs/PROTOCOL.md` / `CONTRIBUTING.md`.
     pub fn debug_list_interfaces(vendor_id: u16) -> Result<Vec<InterfaceInfo>, DeviceError> {
         let api = HidApi::new()?;
         Ok(api

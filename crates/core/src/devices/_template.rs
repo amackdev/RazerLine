@@ -10,8 +10,8 @@
 //! 3. Fill in which capabilities it actually has, and the command bytes
 //!    that drive them. Start from the shared vocabulary in
 //!    `crate::commands` — many Razer mice reuse the same bytes — then
-//!    verify with a USB capture (see `docs/PROTOCOL.md`) and correct any
-//!    that don't match.
+//!    verify with a USB capture (Wireshark + `usbmon` on Linux, USBPcap
+//!    on Windows) and correct any that don't match.
 //! 4. **Check the transaction id per command type, not just per device.**
 //!    Some devices (e.g. the Viper Ultimate) use a different transaction
 //!    id for LED commands than for DPI/poll-rate/identity — don't assume

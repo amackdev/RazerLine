@@ -6,8 +6,9 @@
 //! mouse/keyboard/etc. means writing one new file here and adding it to
 //! [`KNOWN_DEVICES`] — it does **not** require touching the protocol
 //! framing, the CLI, or the GUI, all of which are written generically
-//! against this struct. See `CONTRIBUTING.md` for the step-by-step guide
-//! and `devices/_template.rs` for an annotated starting point.
+//! against this struct. See README.md's "Adding support for your device"
+//! for the step-by-step guide and `devices/_template.rs` for an
+//! annotated starting point.
 
 mod basilisk_v3;
 mod viper_ultimate;

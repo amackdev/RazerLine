@@ -9,7 +9,8 @@
 //! - [`commands`]: the shared command-class/id vocabulary most Razer mice
 //!   reuse; a starting point for writing device profiles.
 //! - [`devices`]: the registry of supported models — this is where you add
-//!   support for a new device, see `CONTRIBUTING.md`.
+//!   support for a new device, see README.md's "Adding support for your
+//!   device" and `devices/_template.rs`.
 //! - [`device`]: the generic [`device::RazerDevice`] control handle, driven
 //!   by whichever profile matches the connected hardware.
 

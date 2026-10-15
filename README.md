@@ -18,8 +18,8 @@ library, so this is meant to scale past one person's one mouse.
 
 **Not affiliated with or endorsed by Razer Inc.** Built from the public
 USB HID protocol reverse-engineered by the [OpenRazer](https://github.com/openrazer/openrazer)
-community (GPL-3.0). See `docs/PROTOCOL.md` for protocol details and how
-to verify/extend them, and `CONTRIBUTING.md` for adding your own device.
+community (GPL-3.0). See "Adding support for your device" below for how
+to extend or verify the protocol for a new model.
 
 ## What works today
 
@@ -51,7 +51,7 @@ declares them):
 - Firmware version / serial number query
 
 Not yet in scope: per-key keyboard RGB matrices, on-device macros/profile
-storage, firmware updates. See "Scope limits" in `docs/PROTOCOL.md`.
+storage, firmware updates.
 
 ## Why Rust
 
@@ -73,7 +73,6 @@ crates/
   gui/    razer-hid-gui    — `razerline` desktop control panel (egui)
 assets/   razer-inspired-logo.svg — original artwork, not Razer's mark
 udev/     Linux udev rule for non-root HID access
-docs/     protocol notes
 .github/workflows/  CI: fmt/clippy/build/test on Linux, Windows, macOS
 ```
 
@@ -163,9 +162,39 @@ without touching layout code.
 
 ## Adding support for your device
 
-See `CONTRIBUTING.md` — the short version is: copy
-`crates/core/src/devices/_template.rs`, fill in your device's VID/PID and
-capabilities, verify against real hardware, register it, open a PR.
+1. Copy `crates/core/src/devices/_template.rs` to a new file named after
+   your device (e.g. `deathadder_v3.rs`) — it has inline comments
+   explaining each field.
+2. Find your device's USB vendor/product id (`lsusb -d 1532:` on Linux,
+   Device Manager on Windows, `ioreg -p IOUSB -l -w0 | grep -i razer` on
+   macOS).
+3. Fill in the `DeviceProfile`: which capabilities it has
+   (`dpi`/`poll_rate`/`leds`/`matrix`/`identity`), set the rest to
+   `None`/`&[]`. **Check the transaction id per command type, not just
+   per device** — some devices (e.g. the Viper Ultimate) use a different
+   one for LED commands than for DPI/poll-rate/identity. Cross-reference
+   OpenRazer's kernel driver source (`driver/razermouse_driver.c`,
+   `razerchromacommon.c`) for your exact `USB_DEVICE_ID_RAZER_*` PID, and
+   its daemon metadata (`daemon/openrazer_daemon/hardware/*.py`) for
+   facts the driver doesn't state directly (`MATRIX_DIMS`, `DPI_MAX`).
+4. Test against real hardware with the CLI (`razer-ctl list-devices`,
+   `razer-ctl dpi ...`, etc.). If a command fails or does nothing,
+   capture USB traffic with Wireshark (`usbmon` on Linux, USBPcap on
+   Windows) and diff it against what this project sends.
+5. Set `confidence: Confidence::Verified` only for capabilities you
+   personally tested working. Leave the rest `Unverified`.
+6. Register it in `crates/core/src/devices/mod.rs` (`mod` + `pub use` +
+   add to `KNOWN_DEVICES`).
+7. Run `cargo fmt --all`, `cargo clippy --workspace --all-targets`, and
+   `cargo test --workspace` — CI runs the same checks on Linux/Windows/
+   macOS.
+8. Open a PR describing what you tested and what you couldn't. Even a
+   report with no code ("I tested `<device>`, DPI works, breathing does
+   nothing") is useful.
+
+If your device needs a capability that doesn't fit `dpi`/`poll_rate`/
+`leds`/`matrix` at all (e.g. per-key keyboard RGB), that's a sign the
+model in `devices/mod.rs` needs a new type — propose it in your PR.
 
 ## License
 
