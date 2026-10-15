@@ -25,6 +25,7 @@ mod basilisk_v3_35k;
 mod basilisk_v3_pro_35k_phantom_green_edition_wired;
 mod basilisk_v3_pro_35k_phantom_green_edition_wireless;
 mod basilisk_v3_pro_35k_wired;
+mod basilisk_v3_pro_35k_wireless;
 
 pub use basilisk_v3::BASILISK_V3;
 pub use viper_ultimate::{VIPER_ULTIMATE_WIRED, VIPER_ULTIMATE_WIRELESS};
@@ -41,6 +42,7 @@ pub use basilisk_v3_35k::BASILISK_V3_35K;
 pub use basilisk_v3_pro_35k_phantom_green_edition_wired::BASILISK_V3_PRO_35K_PHANTOM_GREEN_EDITION_WIRED;
 pub use basilisk_v3_pro_35k_phantom_green_edition_wireless::BASILISK_V3_PRO_35K_PHANTOM_GREEN_EDITION_WIRELESS;
 pub use basilisk_v3_pro_35k_wired::BASILISK_V3_PRO_35K_WIRED;
+pub use basilisk_v3_pro_35k_wireless::BASILISK_V3_PRO_35K_WIRELESS;
 
 /// The broad category of peripheral. Currently only `Mouse` capabilities
 /// (DPI, polling rate, two-zone RGB) are modeled end to end; keyboards and
@@ -162,7 +164,7 @@ pub enum Confidence {
 }
 
 pub const KNOWN_DEVICES: &[DeviceProfile] =
-    &[BASILISK_V3, VIPER_ULTIMATE_WIRED, VIPER_ULTIMATE_WIRELESS, ABYSSUS_2000, ABYSSUS_ELITE_DVA_EDITION, ABYSSUS_ESSENTIAL, ABYSSUS_V2, BASILISK, BASILISK_ESSENTIAL, BASILISK_MOBILE_WIRED, BASILISK_ULTIMATE_WIRED, BASILISK_V2, BASILISK_V3_35K, BASILISK_V3_PRO_35K_PHANTOM_GREEN_EDITION_WIRED, BASILISK_V3_PRO_35K_PHANTOM_GREEN_EDITION_WIRELESS, BASILISK_V3_PRO_35K_WIRED];
+    &[BASILISK_V3, VIPER_ULTIMATE_WIRED, VIPER_ULTIMATE_WIRELESS, ABYSSUS_2000, ABYSSUS_ELITE_DVA_EDITION, ABYSSUS_ESSENTIAL, ABYSSUS_V2, BASILISK, BASILISK_ESSENTIAL, BASILISK_MOBILE_WIRED, BASILISK_ULTIMATE_WIRED, BASILISK_V2, BASILISK_V3_35K, BASILISK_V3_PRO_35K_PHANTOM_GREEN_EDITION_WIRED, BASILISK_V3_PRO_35K_PHANTOM_GREEN_EDITION_WIRELESS, BASILISK_V3_PRO_35K_WIRED, BASILISK_V3_PRO_35K_WIRELESS];
 
 pub fn find_by_pid(vendor_id: u16, product_id: u16) -> Option<&'static DeviceProfile> {
     KNOWN_DEVICES
