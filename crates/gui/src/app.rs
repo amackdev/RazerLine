@@ -25,6 +25,9 @@ pub struct GuiApp {
     dpi_y: u16,
 
     selected_zone_idx: usize,
+    /// When true, lighting actions apply to every zone at once (Razer
+    /// Synapse's "All" view); when false, only to the selected zone.
+    sync_zones: bool,
     led_color: [u8; 3],
     brightness: u8,
     last_preview: PreviewKind,
@@ -46,6 +49,7 @@ impl Default for GuiApp {
             dpi_x: 800,
             dpi_y: 800,
             selected_zone_idx: 0,
+            sync_zones: true,
             led_color: [64, 209, 128],
             brightness: 100,
             last_preview: PreviewKind::Off,
@@ -122,6 +126,34 @@ impl GuiApp {
         match result {
             Ok(_) => self.set_status(ok_msg, false),
             Err(e) => self.set_status(format!("Error: {e}"), true),
+        }
+    }
+
+    /// Runs `f` against either just the selected zone or every zone on the
+    /// device, depending on `sync_zones` — the "All" vs. per-zone toggle.
+    /// Reports the first failure (naming which zone), or success.
+    fn apply_to_zones(
+        &mut self,
+        zones: &'static [LedZoneProfile],
+        selected_idx: usize,
+        mut f: impl FnMut(&RazerDevice, &LedZoneProfile) -> Result<(), razer_hid_core::DeviceError>,
+        ok_msg: &str,
+    ) {
+        let targets: &[LedZoneProfile] = if self.sync_zones {
+            zones
+        } else {
+            &zones[selected_idx..=selected_idx]
+        };
+        let dev = self.device.as_ref().unwrap();
+        let mut failure = None;
+        for zone in targets {
+            if let Err(e) = f(dev, zone) {
+                failure.get_or_insert_with(|| format!("{} failed: {e}", zone.name));
+            }
+        }
+        match failure {
+            None => self.set_status(ok_msg, false),
+            Some(msg) => self.set_status(msg, true),
         }
     }
 }
@@ -340,17 +372,37 @@ impl GuiApp {
             let zone_idx = self.selected_zone_idx.min(zones.len() - 1);
 
             if zones.len() > 1 {
-                egui::ComboBox::from_label("Zone")
-                    .selected_text(zones[zone_idx].name)
-                    .show_ui(ui, |ui| {
-                        for (i, z) in zones.iter().enumerate() {
-                            ui.selectable_value(&mut self.selected_zone_idx, i, z.name);
-                        }
-                    });
-            }
-            let zone: LedZoneProfile = zones[zone_idx];
+                ui.horizontal(|ui| {
+                    ui.selectable_value(&mut self.sync_zones, true, "All zones");
+                    ui.selectable_value(&mut self.sync_zones, false, "Individually");
+                });
+                ui.add_space(6.0);
 
-            ui.add_space(6.0);
+                if !self.sync_zones {
+                    egui::ComboBox::from_label("Zone")
+                        .selected_text(zones[zone_idx].name)
+                        .show_ui(ui, |ui| {
+                            for (i, z) in zones.iter().enumerate() {
+                                ui.selectable_value(&mut self.selected_zone_idx, i, z.name);
+                            }
+                        });
+                } else {
+                    let names: Vec<_> = zones.iter().map(|z| z.name).collect();
+                    ui.label(
+                        egui::RichText::new(format!("Applies to: {}", names.join(", ")))
+                            .small()
+                            .color(theme::MUTED),
+                    );
+                }
+                ui.add_space(6.0);
+            }
+
+            let any_brightness = if self.sync_zones {
+                zones.iter().any(|z| z.brightness_command_id.is_some())
+            } else {
+                zones[zone_idx].brightness_command_id.is_some()
+            };
+
             widgets::effect_preview(ui, self.last_preview, self.led_color, ui.input(|i| i.time));
             ui.add_space(10.0);
 
@@ -362,37 +414,51 @@ impl GuiApp {
 
             ui.horizontal_wrapped(|ui| {
                 if ui.button("Static").clicked() {
-                    let r = self
-                        .device
-                        .as_ref()
-                        .unwrap()
-                        .set_led_static(&zone, self.led_color);
+                    let color = self.led_color;
                     self.last_preview = PreviewKind::Static;
-                    self.apply(r, "LED set to static color");
+                    self.apply_to_zones(
+                        zones,
+                        zone_idx,
+                        |dev, zone| dev.set_led_static(zone, color),
+                        "LED set to static color",
+                    );
                 }
                 if ui.button("Breathing").clicked() {
-                    let r = self
-                        .device
-                        .as_ref()
-                        .unwrap()
-                        .set_led_breathing(&zone, self.led_color);
+                    let color = self.led_color;
                     self.last_preview = PreviewKind::Breathing;
-                    self.apply(r, "LED breathing");
+                    self.apply_to_zones(
+                        zones,
+                        zone_idx,
+                        |dev, zone| dev.set_led_breathing(zone, color),
+                        "LED breathing",
+                    );
                 }
                 if ui.button("Spectrum").clicked() {
-                    let r = self.device.as_ref().unwrap().set_led_spectrum(&zone);
                     self.last_preview = PreviewKind::Spectrum;
-                    self.apply(r, "LED cycling spectrum");
+                    self.apply_to_zones(
+                        zones,
+                        zone_idx,
+                        |dev, zone| dev.set_led_spectrum(zone),
+                        "LED cycling spectrum",
+                    );
                 }
                 if ui.button("Wave").clicked() {
-                    let r = self.device.as_ref().unwrap().set_led_wave(&zone, 1);
                     self.last_preview = PreviewKind::Wave;
-                    self.apply(r, "LED wave");
+                    self.apply_to_zones(
+                        zones,
+                        zone_idx,
+                        |dev, zone| dev.set_led_wave(zone, 1),
+                        "LED wave",
+                    );
                 }
                 if ui.button("Off").clicked() {
-                    let r = self.device.as_ref().unwrap().set_led_off(&zone);
                     self.last_preview = PreviewKind::Off;
-                    self.apply(r, "LED off");
+                    self.apply_to_zones(
+                        zones,
+                        zone_idx,
+                        |dev, zone| dev.set_led_off(zone),
+                        "LED off",
+                    );
                 }
             });
             ui.add_space(4.0);
@@ -402,7 +468,7 @@ impl GuiApp {
                     .color(theme::MUTED),
             );
 
-            if zone.brightness_command_id.is_some() {
+            if any_brightness {
                 ui.add_space(10.0);
                 ui.label(
                     egui::RichText::new("Brightness")
@@ -412,8 +478,12 @@ impl GuiApp {
                 let slider = ui.add(egui::Slider::new(&mut self.brightness, 0..=100).suffix("%"));
                 if slider.drag_stopped() || slider.lost_focus() {
                     let b = self.brightness;
-                    let r = self.device.as_ref().unwrap().set_led_brightness(&zone, b);
-                    self.apply(r, "Brightness updated");
+                    self.apply_to_zones(
+                        zones,
+                        zone_idx,
+                        |dev, zone| dev.set_led_brightness(zone, b),
+                        "Brightness updated",
+                    );
                 }
             }
         });
