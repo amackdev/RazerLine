@@ -42,4 +42,5 @@ pub const DEATHADDER_CHROMA: DeviceProfile = DeviceProfile {
         firmware_transaction_id: 0xFF,
         serial_transaction_id: 0xFF,
     }),
+    unsupported_led_effects: &[],
 };

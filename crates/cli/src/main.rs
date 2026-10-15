@@ -63,6 +63,15 @@ enum MatrixAction {
         start: u8,
         colors: String,
     },
+    /// Hardware-animated Spectrum cycling across the whole matrix. Only
+    /// supported on devices where this is confirmed from source/hardware.
+    Spectrum,
+    /// Hardware-animated Wave across the whole matrix. Only supported on
+    /// devices where this is confirmed from source/hardware.
+    Wave {
+        #[arg(long, default_value_t = 1)]
+        direction: u8,
+    },
 }
 
 #[derive(Subcommand)]
@@ -224,42 +233,81 @@ fn debug_usb() -> Result<(), String> {
     Ok(())
 }
 
+/// `--zone all` (case-insensitive) applies to every zone on the device —
+/// and the underglow/matrix too, for the actions that support it — with
+/// a short delay between writes, matching the GUI's "All zones" mode.
+/// Anything else is looked up as a single named zone, as before.
+fn is_all_zones(zone: &str) -> bool {
+    zone.eq_ignore_ascii_case("all")
+}
+
 fn run_led(dev: &RazerDevice, action: LedAction) -> Result<(), String> {
     match action {
         LedAction::Off { zone } => {
-            let zone = find_zone(dev, &zone)?;
-            dev.set_led_off(&zone).map_err(|e| e.to_string())?;
-            println!("{} LED off", zone.name);
+            if is_all_zones(&zone) {
+                dev.set_led_off_all().map_err(|e| e.to_string())?;
+                println!("All zones off");
+            } else {
+                let zone = find_zone(dev, &zone)?;
+                dev.set_led_off(&zone).map_err(|e| e.to_string())?;
+                println!("{} LED off", zone.name);
+            }
         }
         LedAction::Static { color, zone } => {
-            let zone = find_zone(dev, &zone)?;
             let rgb = hex_rgb(&color)?;
-            dev.set_led_static(&zone, rgb).map_err(|e| e.to_string())?;
-            println!("{} LED set to #{color}", zone.name);
+            if is_all_zones(&zone) {
+                dev.set_led_static_all(rgb).map_err(|e| e.to_string())?;
+                println!("All zones set to #{color}");
+            } else {
+                let zone = find_zone(dev, &zone)?;
+                dev.set_led_static(&zone, rgb).map_err(|e| e.to_string())?;
+                println!("{} LED set to #{color}", zone.name);
+            }
         }
         LedAction::Breathing { color, zone } => {
-            let zone = find_zone(dev, &zone)?;
             let rgb = hex_rgb(&color)?;
-            dev.set_led_breathing(&zone, rgb)
-                .map_err(|e| e.to_string())?;
-            println!("{} LED breathing #{color}", zone.name);
+            if is_all_zones(&zone) {
+                dev.set_led_breathing_all(rgb).map_err(|e| e.to_string())?;
+                println!("All zones breathing #{color}");
+            } else {
+                let zone = find_zone(dev, &zone)?;
+                dev.set_led_breathing(&zone, rgb)
+                    .map_err(|e| e.to_string())?;
+                println!("{} LED breathing #{color}", zone.name);
+            }
         }
         LedAction::Spectrum { zone } => {
-            let zone = find_zone(dev, &zone)?;
-            dev.set_led_spectrum(&zone).map_err(|e| e.to_string())?;
-            println!("{} LED cycling spectrum", zone.name);
+            if is_all_zones(&zone) {
+                dev.set_led_spectrum_all().map_err(|e| e.to_string())?;
+                println!("All zones cycling spectrum");
+            } else {
+                let zone = find_zone(dev, &zone)?;
+                dev.set_led_spectrum(&zone).map_err(|e| e.to_string())?;
+                println!("{} LED cycling spectrum", zone.name);
+            }
         }
         LedAction::Wave { zone, direction } => {
-            let zone = find_zone(dev, &zone)?;
-            dev.set_led_wave(&zone, direction)
-                .map_err(|e| e.to_string())?;
-            println!("{} LED wave", zone.name);
+            if is_all_zones(&zone) {
+                dev.set_led_wave_all(direction).map_err(|e| e.to_string())?;
+                println!("All zones wave");
+            } else {
+                let zone = find_zone(dev, &zone)?;
+                dev.set_led_wave(&zone, direction)
+                    .map_err(|e| e.to_string())?;
+                println!("{} LED wave", zone.name);
+            }
         }
         LedAction::Brightness { percent, zone } => {
-            let zone = find_zone(dev, &zone)?;
-            dev.set_led_brightness(&zone, percent)
-                .map_err(|e| e.to_string())?;
-            println!("{} LED brightness set to {percent}%", zone.name);
+            if is_all_zones(&zone) {
+                dev.set_led_brightness_all(percent)
+                    .map_err(|e| e.to_string())?;
+                println!("All zones brightness set to {percent}%");
+            } else {
+                let zone = find_zone(dev, &zone)?;
+                dev.set_led_brightness(&zone, percent)
+                    .map_err(|e| e.to_string())?;
+                println!("{} LED brightness set to {percent}%", zone.name);
+            }
         }
     }
     Ok(())
@@ -294,6 +342,14 @@ fn run_matrix(dev: &RazerDevice, action: MatrixAction) -> Result<(), String> {
                 "Row {row} columns {start}..{} written",
                 start as usize + rgbs.len()
             );
+        }
+        MatrixAction::Spectrum => {
+            dev.set_matrix_spectrum().map_err(|e| e.to_string())?;
+            println!("Matrix cycling spectrum");
+        }
+        MatrixAction::Wave { direction } => {
+            dev.set_matrix_wave(direction).map_err(|e| e.to_string())?;
+            println!("Matrix wave");
         }
     }
     Ok(())

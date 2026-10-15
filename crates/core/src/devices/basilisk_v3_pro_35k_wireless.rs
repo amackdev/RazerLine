@@ -62,4 +62,5 @@ pub const BASILISK_V3_PRO_35K_WIRELESS: DeviceProfile = DeviceProfile {
         firmware_transaction_id: 0x1F,
         serial_transaction_id: 0x1F,
     }),
+    unsupported_led_effects: &[],
 };

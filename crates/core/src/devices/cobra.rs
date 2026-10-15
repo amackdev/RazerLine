@@ -52,4 +52,5 @@ pub const COBRA: DeviceProfile = DeviceProfile {
         firmware_transaction_id: 0xFF,
         serial_transaction_id: 0xFF,
     }),
+    unsupported_led_effects: &[],
 };

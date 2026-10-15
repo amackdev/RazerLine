@@ -1,4 +1,14 @@
+use std::thread::sleep;
 use std::time::{Duration, Instant};
+
+/// Delay between consecutive zone writes when "All zones" fires more than
+/// one LED command in a row. The CLI only ever sends one command per
+/// invocation and works reliably; sending several back-to-back with no
+/// gap appears to let the firmware drop/overwrite an earlier zone's
+/// effect — observed as Scroll wheel's color getting clobbered by Logo's
+/// write immediately after it. Keep this short; it's not meant to be
+/// perceptible as lag, just enough settling time between HID writes.
+const INTER_ZONE_DELAY: Duration = Duration::from_millis(60);
 
 use eframe::egui;
 use razer_hid_core::devices::{DeviceProfile, LedZoneProfile};
@@ -152,7 +162,10 @@ impl GuiApp {
         };
         let dev = self.device.as_ref().unwrap();
         let mut failure = None;
-        for zone in targets {
+        for (i, zone) in targets.iter().enumerate() {
+            if i > 0 {
+                sleep(INTER_ZONE_DELAY);
+            }
             if let Err(e) = f(dev, zone) {
                 failure.get_or_insert_with(|| format!("{} failed: {e}", zone.name));
             }
@@ -164,18 +177,18 @@ impl GuiApp {
     }
 
     /// Like [`apply_to_zones`](Self::apply_to_zones), but when "All zones"
-    /// is active and the device has an underglow/matrix capability, also
-    /// runs `matrix_f` against it so Underglow doesn't sit outside the
-    /// sync — Synapse treats it as just another zone for actions it can
-    /// actually do (a solid color, or off). Only called when `sync_zones`
-    /// is true; in per-zone mode Underglow has its own card/controls.
+    /// is active and `matrix_f` is `Some`, also runs it against the
+    /// underglow/matrix so it doesn't sit outside the sync — Synapse
+    /// treats it as just another zone for actions it actually supports.
+    /// Pass `None` for an action the matrix can't do at all (e.g.
+    /// Breathing). Only applies when `sync_zones` is true; in per-zone
+    /// mode Underglow has its own card/controls.
     fn apply_to_zones_and_matrix(
         &mut self,
         zones: &'static [LedZoneProfile],
         selected_idx: usize,
         mut zone_f: impl FnMut(&RazerDevice, &LedZoneProfile) -> Result<(), razer_hid_core::DeviceError>,
-        matrix_f: impl FnOnce(&RazerDevice) -> Result<(), razer_hid_core::DeviceError>,
-        has_matrix: bool,
+        matrix_f: Option<impl FnOnce(&RazerDevice) -> Result<(), razer_hid_core::DeviceError>>,
         ok_msg: &str,
     ) {
         let targets: &[LedZoneProfile] = if self.sync_zones {
@@ -185,14 +198,22 @@ impl GuiApp {
         };
         let dev = self.device.as_ref().unwrap();
         let mut failure = None;
-        for zone in targets {
+        for (i, zone) in targets.iter().enumerate() {
+            if i > 0 {
+                sleep(INTER_ZONE_DELAY);
+            }
             if let Err(e) = zone_f(dev, zone) {
                 failure.get_or_insert_with(|| format!("{} failed: {e}", zone.name));
             }
         }
-        if self.sync_zones && has_matrix {
-            if let Err(e) = matrix_f(dev) {
-                failure.get_or_insert_with(|| format!("Underglow failed: {e}"));
+        if self.sync_zones {
+            if let Some(matrix_f) = matrix_f {
+                if !targets.is_empty() {
+                    sleep(INTER_ZONE_DELAY);
+                }
+                if let Err(e) = matrix_f(dev) {
+                    failure.get_or_insert_with(|| format!("Underglow failed: {e}"));
+                }
             }
         }
         match failure {
@@ -338,7 +359,11 @@ impl GuiApp {
         if !profile.leds.is_empty() {
             self.ui_lighting_card(ui, profile);
         }
-        if profile.matrix.is_some() {
+        // In "All zones" mode the Lighting card's Static/Off/Spectrum/Wave
+        // buttons already drive the underglow (see `apply_to_zones_and_matrix`)
+        // — showing this card too would let the user set it to a second,
+        // conflicting color/effect right next to the sync controls.
+        if profile.matrix.is_some() && !self.sync_zones {
             self.ui_matrix_card(ui);
         }
         if profile.identity.is_some() {
@@ -432,6 +457,10 @@ impl GuiApp {
             let zone_idx = self.selected_zone_idx.min(zones.len() - 1);
 
             let has_matrix = profile.matrix.is_some();
+            let matrix_has_effects = profile.matrix.and_then(|m| m.effect_led_id).is_some();
+            let supports = |effect: razer_hid_core::commands::LedEffect| {
+                !profile.unsupported_led_effects.contains(&effect)
+            };
 
             if zones.len() > 1 || has_matrix {
                 ui.horizontal(|ui| {
@@ -494,12 +523,13 @@ impl GuiApp {
                         zones,
                         zone_idx,
                         |dev, zone| dev.set_led_static(zone, color),
-                        |dev| dev.fill_matrix(color),
-                        has_matrix,
+                        has_matrix.then_some(move |dev: &RazerDevice| dev.fill_matrix(color)),
                         "LED set to static color",
                     );
                 }
-                if ui.button("Breathing").clicked() {
+                if supports(razer_hid_core::commands::LedEffect::Breathing)
+                    && ui.button("Breathing").clicked()
+                {
                     let color = self.led_color;
                     self.last_preview = PreviewKind::Breathing;
                     self.apply_to_zones(
@@ -511,19 +541,21 @@ impl GuiApp {
                 }
                 if ui.button("Spectrum").clicked() {
                     self.last_preview = PreviewKind::Spectrum;
-                    self.apply_to_zones(
+                    self.apply_to_zones_and_matrix(
                         zones,
                         zone_idx,
                         |dev, zone| dev.set_led_spectrum(zone),
+                        matrix_has_effects.then_some(|dev: &RazerDevice| dev.set_matrix_spectrum()),
                         "LED cycling spectrum",
                     );
                 }
                 if ui.button("Wave").clicked() {
                     self.last_preview = PreviewKind::Wave;
-                    self.apply_to_zones(
+                    self.apply_to_zones_and_matrix(
                         zones,
                         zone_idx,
                         |dev, zone| dev.set_led_wave(zone, 1),
+                        matrix_has_effects.then_some(|dev: &RazerDevice| dev.set_matrix_wave(1)),
                         "LED wave",
                     );
                 }
@@ -533,8 +565,7 @@ impl GuiApp {
                         zones,
                         zone_idx,
                         |dev, zone| dev.set_led_off(zone),
-                        |dev| dev.fill_matrix([0, 0, 0]),
-                        has_matrix,
+                        has_matrix.then_some(|dev: &RazerDevice| dev.fill_matrix([0, 0, 0])),
                         "LED off",
                     );
                 }
@@ -545,10 +576,18 @@ impl GuiApp {
                     .small()
                     .color(theme::MUTED),
             );
-            if self.sync_zones && has_matrix {
+            if self.sync_zones && has_matrix && !matrix_has_effects {
                 ui.label(
                     egui::RichText::new(
                         "Underglow only supports a solid color or off — Breathing/Spectrum/Wave don't reach it.",
+                    )
+                    .small()
+                    .color(theme::MUTED),
+                );
+            } else if self.sync_zones && has_matrix {
+                ui.label(
+                    egui::RichText::new(
+                        "Underglow follows Static/Off/Spectrum/Wave too, just not Breathing.",
                     )
                     .small()
                     .color(theme::MUTED),
@@ -587,17 +626,6 @@ impl GuiApp {
                     .small()
                     .color(theme::MUTED),
             );
-            if self.sync_zones {
-                ui.label(
-                    egui::RichText::new(
-                        "Lighting is set to \"All zones\" — Static/Off up there already \
-                         include this. Use the controls below for a different underglow \
-                         color, or switch Lighting to \"Individually\".",
-                    )
-                    .small()
-                    .color(theme::MUTED),
-                );
-            }
             ui.add_space(6.0);
 
             widgets::effect_preview(ui, PreviewKind::Static, self.matrix_color, 0.0);

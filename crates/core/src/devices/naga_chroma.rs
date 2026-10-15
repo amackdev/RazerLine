@@ -47,6 +47,7 @@ pub const NAGA_CHROMA: DeviceProfile = DeviceProfile {
         commit_command_class: CommandClass::Led as u8,
         commit_command_id: LedCommand::SetEffect as u8,
         commit_transaction_id: 0x3F,
+        effect_led_id: None,
     }),
     identity: Some(IdentityProfile {
         command_class: CommandClass::General as u8,
@@ -55,4 +56,5 @@ pub const NAGA_CHROMA: DeviceProfile = DeviceProfile {
         firmware_transaction_id: 0xFF,
         serial_transaction_id: 0xFF,
     }),
+    unsupported_led_effects: &[],
 };

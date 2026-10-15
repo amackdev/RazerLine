@@ -36,4 +36,5 @@ pub const MAMBA_2012_WIRED: DeviceProfile = DeviceProfile {
     leds: &[],
     matrix: None,
     identity: None,
+    unsupported_led_effects: &[],
 };

@@ -52,4 +52,5 @@ pub const BASILISK_V3_PRO_35K_PHANTOM_GREEN_EDITION_WIRELESS: DeviceProfile = De
         firmware_transaction_id: 0x1F,
         serial_transaction_id: 0x1F,
     }),
+    unsupported_led_effects: &[],
 };

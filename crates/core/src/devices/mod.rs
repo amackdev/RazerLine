@@ -294,6 +294,13 @@ pub struct MatrixProfile {
     pub commit_command_class: u8,
     pub commit_command_id: u8,
     pub commit_transaction_id: u8,
+    /// Some matrices *also* answer the same SetEffect command a normal
+    /// [`LedZoneProfile`] does — just addressed to this LED id instead of
+    /// a zone id — giving genuine hardware-animated Wave/Spectrum (and
+    /// Static/Brightness) on the whole strip, rather than only being able
+    /// to paint a static frame via raw pixel writes. `None` if the matrix
+    /// is custom-frame-only (no confirmed source evidence of this).
+    pub effect_led_id: Option<u8>,
 }
 
 /// Everything the control library needs to know about one device model.
@@ -312,6 +319,10 @@ pub struct DeviceProfile {
     pub leds: &'static [LedZoneProfile],
     pub matrix: Option<MatrixProfile>,
     pub identity: Option<IdentityProfile>,
+    /// Effects confirmed to be rejected outright for every zone/matrix on
+    /// this device (e.g. Basilisk V3 rejects Breathing and Off). Lets the
+    /// GUI hide those controls instead of surfacing a firmware error.
+    pub unsupported_led_effects: &'static [crate::commands::LedEffect],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

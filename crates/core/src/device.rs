@@ -417,14 +417,36 @@ impl RazerDevice {
         effect: crate::commands::LedEffect,
         tail: &[u8],
     ) -> Result<(), DeviceError> {
+        self.send_effect_report(
+            zone.command_class,
+            zone.effect_command_id,
+            zone.transaction_id,
+            zone.id,
+            effect,
+            tail,
+        )
+    }
+
+    /// Shared wire format between a real zone and the matrix's own effect
+    /// commands (see [`set_matrix_wave`](Self::set_matrix_wave)) — both
+    /// just address a different LED id.
+    fn send_effect_report(
+        &self,
+        command_class: u8,
+        command_id: u8,
+        transaction_id: u8,
+        led_id: u8,
+        effect: crate::commands::LedEffect,
+        tail: &[u8],
+    ) -> Result<(), DeviceError> {
         let mut args = vec![
             crate::commands::Storage::Variable as u8,
-            zone.id,
+            led_id,
             effect as u8,
         ];
         args.extend_from_slice(tail);
-        let mut report = RazerReport::new(zone.command_class, zone.effect_command_id, args)?;
-        report.transaction_id = zone.transaction_id;
+        let mut report = RazerReport::new(command_class, command_id, args)?;
+        report.transaction_id = transaction_id;
         self.transact(&report)?;
         Ok(())
     }
@@ -447,6 +469,115 @@ impl RazerDevice {
         report.transaction_id = zone.transaction_id;
         self.transact(&report)?;
         Ok(())
+    }
+
+    // -- Apply one action to every zone (Razer Synapse's "All" view) --------
+
+    /// Delay between consecutive zone/matrix writes when one action
+    /// touches more than one LED in a row. Observed necessity: without
+    /// it, sending two zone writes back-to-back can silently drop the
+    /// *first* zone's effect (as if the firmware doesn't have enough
+    /// settling time between HID writes) — a single write on its own
+    /// always works. The CLI's single-zone commands never hit this since
+    /// they only ever send one write per process invocation.
+    const INTER_ZONE_DELAY: Duration = Duration::from_millis(60);
+
+    /// Runs `f` against every LED zone on the device, in order, pausing
+    /// [`INTER_ZONE_DELAY`](Self::INTER_ZONE_DELAY) between writes.
+    /// Continues past a failing zone rather than stopping early, and
+    /// returns the *first* error encountered (if any) only after every
+    /// zone has been attempted.
+    fn for_each_zone(
+        &self,
+        mut f: impl FnMut(&LedZoneProfile) -> Result<(), DeviceError>,
+    ) -> Result<(), DeviceError> {
+        let mut first_err = None;
+        for (i, zone) in self.led_zones().iter().enumerate() {
+            if i > 0 {
+                sleep(Self::INTER_ZONE_DELAY);
+            }
+            if let Err(e) = f(zone) {
+                first_err.get_or_insert(e);
+            }
+        }
+        match first_err {
+            None => Ok(()),
+            Some(e) => Err(e),
+        }
+    }
+
+    /// Sets every zone to the same solid color, and — since the matrix/
+    /// underglow mechanism's only comparable capability is painting a
+    /// solid color too — also fills it with the same color if the device
+    /// has one. This is "All zones" from the CLI/GUI's point of view.
+    pub fn set_led_static_all(&self, rgb: [u8; 3]) -> Result<(), DeviceError> {
+        let mut result = self.for_each_zone(|zone| self.set_led_static(zone, rgb));
+        if self.profile.matrix.is_some() {
+            sleep(Self::INTER_ZONE_DELAY);
+            if let Err(e) = self.fill_matrix(rgb) {
+                result = result.and(Err(e));
+            }
+        }
+        result
+    }
+
+    /// Turns every zone off, including the underglow/matrix if present.
+    pub fn set_led_off_all(&self) -> Result<(), DeviceError> {
+        let mut result = self.for_each_zone(|zone| self.set_led_off(zone));
+        if self.profile.matrix.is_some() {
+            sleep(Self::INTER_ZONE_DELAY);
+            if let Err(e) = self.fill_matrix([0, 0, 0]) {
+                result = result.and(Err(e));
+            }
+        }
+        result
+    }
+
+    /// Sets every zone to Breathing with the same color. No matrix
+    /// equivalent — confirmed devices reject Breathing addressed to the
+    /// matrix's own LED id the same way they reject it on real zones.
+    pub fn set_led_breathing_all(&self, rgb: [u8; 3]) -> Result<(), DeviceError> {
+        self.for_each_zone(|zone| self.set_led_breathing(zone, rgb))
+    }
+
+    /// Sets every zone to Spectrum cycling, and the matrix too if it
+    /// answers the same effect command under its own LED id (see
+    /// [`set_matrix_spectrum`](Self::set_matrix_spectrum)).
+    pub fn set_led_spectrum_all(&self) -> Result<(), DeviceError> {
+        let mut result = self.for_each_zone(|zone| self.set_led_spectrum(zone));
+        if self.profile.matrix.and_then(|m| m.effect_led_id).is_some() {
+            sleep(Self::INTER_ZONE_DELAY);
+            if let Err(e) = self.set_matrix_spectrum() {
+                result = result.and(Err(e));
+            }
+        }
+        result
+    }
+
+    /// Sets every zone to Wave, and the matrix too if it answers the same
+    /// effect command under its own LED id (see
+    /// [`set_matrix_wave`](Self::set_matrix_wave)).
+    pub fn set_led_wave_all(&self, direction: u8) -> Result<(), DeviceError> {
+        let mut result = self.for_each_zone(|zone| self.set_led_wave(zone, direction));
+        if self.profile.matrix.and_then(|m| m.effect_led_id).is_some() {
+            sleep(Self::INTER_ZONE_DELAY);
+            if let Err(e) = self.set_matrix_wave(direction) {
+                result = result.and(Err(e));
+            }
+        }
+        result
+    }
+
+    /// Sets brightness on every zone that supports it, silently skipping
+    /// zones that don't (brightness support can vary per zone on the same
+    /// device) rather than failing the whole batch over one zone.
+    pub fn set_led_brightness_all(&self, percent: u8) -> Result<(), DeviceError> {
+        self.for_each_zone(|zone| {
+            if zone.brightness_command_id.is_none() {
+                return Ok(());
+            }
+            self.set_led_brightness(zone, percent)
+        })
     }
 
     // -- Addressable LED matrix (e.g. an underglow strip) --------------------
@@ -533,6 +664,56 @@ impl RazerDevice {
         let colors = vec![rgb; cols as usize];
         self.set_matrix_row(0, 0, &colors)?;
         self.commit_matrix_frame()
+    }
+
+    /// LED id/command bytes for the matrix's *own* effect commands (as
+    /// opposed to the raw-pixel custom-frame write), for devices
+    /// confirmed to answer them — see [`MatrixProfile::effect_led_id`].
+    fn matrix_effect_target(&self) -> Result<(u8, u8, u8, u8), DeviceError> {
+        let matrix = self
+            .profile
+            .matrix
+            .ok_or(DeviceError::Unsupported("LED matrix", self.profile.name))?;
+        let led_id = matrix
+            .effect_led_id
+            .ok_or(DeviceError::Unsupported("matrix effect", self.profile.name))?;
+        Ok((
+            matrix.commit_command_class,
+            matrix.commit_command_id,
+            matrix.commit_transaction_id,
+            led_id,
+        ))
+    }
+
+    /// Hardware-animated Spectrum cycling across the matrix, unlike
+    /// [`fill_matrix`](Self::fill_matrix) which can only paint one static
+    /// frame. Only on devices where [`MatrixProfile::effect_led_id`] is `Some`.
+    pub fn set_matrix_spectrum(&self) -> Result<(), DeviceError> {
+        let (class, cmd, txn, led_id) = self.matrix_effect_target()?;
+        self.send_effect_report(
+            class,
+            cmd,
+            txn,
+            led_id,
+            crate::commands::LedEffect::Spectrum,
+            &[0; 3],
+        )
+    }
+
+    /// Hardware-animated Wave across the matrix. Only on devices where
+    /// [`MatrixProfile::effect_led_id`] is `Some`.
+    pub fn set_matrix_wave(&self, direction: u8) -> Result<(), DeviceError> {
+        let (class, cmd, txn, led_id) = self.matrix_effect_target()?;
+        let direction = direction.min(2);
+        let tail = [direction, 0x28, 0x00];
+        self.send_effect_report(
+            class,
+            cmd,
+            txn,
+            led_id,
+            crate::commands::LedEffect::Wave,
+            &tail,
+        )
     }
 
     // -- Identity ------------------------------------------------------------

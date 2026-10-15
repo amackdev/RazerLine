@@ -43,4 +43,5 @@ pub const VIPER_8K: DeviceProfile = DeviceProfile {
         firmware_transaction_id: 0xFF,
         serial_transaction_id: 0xFF,
     }),
+    unsupported_led_effects: &[],
 };

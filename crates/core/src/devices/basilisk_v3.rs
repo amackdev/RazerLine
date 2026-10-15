@@ -8,10 +8,16 @@
 //! attempt them for this exact PID either.
 //!
 //! The third LED (bottom/underglow) is a separate addressable 11-LED
-//! strip (`MATRIX_DIMS = [1, 11]` in OpenRazer's daemon metadata,
-//! `daemon/openrazer_daemon/hardware/mouse.py`), not a single-color zone
-//! — real hardware rejects the simple zone-effect command for it
-//! outright. It's modeled below as `matrix`, not as a `LedZoneProfile`.
+//! strip (`MATRIX_DIMS = [1, 11]` in OpenRazer's daemon metadata), so
+//! it's modeled below as `matrix` rather than a `LedZoneProfile`. It's
+//! not custom-frame-only, though: per `razermouse_driver.c`'s unprefixed
+//! `matrix_effect_wave`/`_spectrum`/`_static`/`matrix_brightness`
+//! switches, this PID also answers those as a real zone addressed to
+//! `ZERO_LED` (0x00), giving actual hardware-animated Wave/Spectrum on
+//! the strip — hence `effect_led_id: Some(CommonLedId::Zero as u8)`
+//! below. It's absent from the unprefixed `matrix_effect_none`/
+//! `_breathing` switches though, so Off/Breathing aren't reachable that
+//! way (Off still works by filling the matrix with black instead).
 
 use super::{
     Confidence, DeviceKind, DeviceProfile, DpiProfile, IdentityProfile, LedZoneProfile,
@@ -88,6 +94,7 @@ pub const BASILISK_V3: DeviceProfile = DeviceProfile {
         commit_command_class: CommandClass::Led as u8,
         commit_command_id: LedCommand::SetEffect as u8,
         commit_transaction_id: TRANSACTION_ID,
+        effect_led_id: Some(CommonLedId::Zero as u8),
     }),
     identity: Some(IdentityProfile {
         command_class: CommandClass::General as u8,
@@ -96,4 +103,8 @@ pub const BASILISK_V3: DeviceProfile = DeviceProfile {
         firmware_transaction_id: TRANSACTION_ID,
         serial_transaction_id: TRANSACTION_ID,
     }),
+    unsupported_led_effects: &[
+        crate::commands::LedEffect::Off,
+        crate::commands::LedEffect::Breathing,
+    ],
 };

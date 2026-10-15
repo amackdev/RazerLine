@@ -42,4 +42,5 @@ pub const ABYSSUS_V2: DeviceProfile = DeviceProfile {
         firmware_transaction_id: 0xFF,
         serial_transaction_id: 0xFF,
     }),
+    unsupported_led_effects: &[],
 };

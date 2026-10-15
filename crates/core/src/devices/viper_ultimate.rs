@@ -68,6 +68,7 @@ const fn profile(name: &'static str, product_id: u16) -> DeviceProfile {
             firmware_transaction_id: GENERAL_TRANSACTION_ID,
             serial_transaction_id: GENERAL_TRANSACTION_ID,
         }),
+        unsupported_led_effects: &[],
     }
 }
 

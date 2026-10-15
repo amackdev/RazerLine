@@ -52,4 +52,5 @@ pub const DEATHADDER_V2_PRO_WIRED: DeviceProfile = DeviceProfile {
         firmware_transaction_id: 0x3F,
         serial_transaction_id: 0x3F,
     }),
+    unsupported_led_effects: &[],
 };
