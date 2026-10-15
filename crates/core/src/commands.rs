@@ -104,4 +104,15 @@ impl PollRateHz {
             _ => None,
         }
     }
+
+    /// Reverse of [`from_hz`](Self::from_hz) — for parsing a `GetPollRate`
+    /// response byte back into a human Hz value.
+    pub fn from_byte(b: u8) -> Option<u32> {
+        match b {
+            0x08 => Some(125),
+            0x02 => Some(500),
+            0x01 => Some(1000),
+            _ => None,
+        }
+    }
 }

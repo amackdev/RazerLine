@@ -344,6 +344,25 @@ impl RazerDevice {
         Ok(())
     }
 
+    /// Queries the device's actual current polling rate, rather than
+    /// assuming whatever was last requested (useful on connect, so the
+    /// UI can show/highlight the real state instead of a guess).
+    pub fn get_poll_rate(&self) -> Result<u32, DeviceError> {
+        let poll = self
+            .profile
+            .poll_rate
+            .ok_or(DeviceError::Unsupported("polling rate", self.profile.name))?;
+        let mut report = RazerReport::new(poll.command_class, poll.get_command_id, vec![0u8])?;
+        report.transaction_id = poll.transaction_id;
+        let resp = self.transact(&report)?;
+        let raw = resp.arguments.first().copied().unwrap_or(0);
+        crate::commands::PollRateHz::from_byte(raw).ok_or_else(|| {
+            DeviceError::OutOfRange(format!(
+                "device reported an unrecognized poll rate byte 0x{raw:02x}"
+            ))
+        })
+    }
+
     // -- Lighting -----------------------------------------------------------
 
     pub fn led_zones(&self) -> &'static [LedZoneProfile] {

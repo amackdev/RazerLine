@@ -231,6 +231,10 @@ pub struct DpiProfile {
 pub struct PollRateProfile {
     pub command_class: u8,
     pub set_command_id: u8,
+    /// `GeneralCommand::GetPollRate` for the common single-byte variant
+    /// most mice use — queries the device's actual current rate instead
+    /// of assuming whatever was last requested.
+    pub get_command_id: u8,
     pub supported_hz: &'static [u32],
     pub transaction_id: u8,
 }

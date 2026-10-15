@@ -48,6 +48,7 @@ const fn profile(name: &'static str, product_id: u16) -> DeviceProfile {
         poll_rate: Some(PollRateProfile {
             command_class: CommandClass::General as u8,
             set_command_id: GeneralCommand::SetPollRate as u8,
+            get_command_id: GeneralCommand::GetPollRate as u8,
             supported_hz: &[125, 500, 1000],
             transaction_id: GENERAL_TRANSACTION_ID,
         }),

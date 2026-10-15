@@ -162,11 +162,18 @@ fn run(cli: Cli) -> Result<(), String> {
     match cli.command {
         Command::ListDevices | Command::DebugUsb => unreachable!(),
         Command::Info => {
-            println!(
-                "Firmware: {}",
-                dev.get_firmware_version().map_err(|e| e.to_string())?
-            );
-            println!("Serial:   {}", dev.get_serial().map_err(|e| e.to_string())?);
+            if let Ok(fw) = dev.get_firmware_version() {
+                println!("Firmware:    {fw}");
+            }
+            if let Ok(serial) = dev.get_serial() {
+                println!("Serial:      {serial}");
+            }
+            if let Ok(dpi) = dev.get_dpi() {
+                println!("DPI:         {}x{}", dpi.x, dpi.y);
+            }
+            if let Ok(hz) = dev.get_poll_rate() {
+                println!("Poll rate:   {hz}Hz");
+            }
         }
         Command::ListLeds => {
             for zone in dev.led_zones() {

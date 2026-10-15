@@ -23,6 +23,10 @@ pub struct GuiApp {
 
     dpi_x: u16,
     dpi_y: u16,
+    /// The device's actual current polling rate, queried on connect —
+    /// `None` until that query returns (or if it's not supported), so the
+    /// UI shows "no selection" rather than guessing one.
+    current_poll_hz: Option<u32>,
 
     selected_zone_idx: usize,
     /// When true, lighting actions apply to every zone at once (Razer
@@ -48,6 +52,7 @@ impl Default for GuiApp {
             status_is_error: false,
             dpi_x: 800,
             dpi_y: 800,
+            current_poll_hz: None,
             selected_zone_idx: 0,
             sync_zones: true,
             led_color: [64, 209, 128],
@@ -103,6 +108,7 @@ impl GuiApp {
                     self.dpi_x = current.x;
                     self.dpi_y = current.y;
                 }
+                self.current_poll_hz = dev.get_poll_rate().ok();
                 self.active_pid = Some(profile.product_id);
                 self.device = Some(dev);
                 self.info_text = None;
@@ -394,12 +400,28 @@ impl GuiApp {
                 );
                 ui.horizontal(|ui| {
                     for hz in poll.supported_hz {
-                        if ui.button(format!("{hz} Hz")).clicked() {
+                        let is_current = self.current_poll_hz == Some(*hz);
+                        if ui
+                            .selectable_label(is_current, format!("{hz} Hz"))
+                            .clicked()
+                        {
                             let result = self.device.as_ref().unwrap().set_poll_rate(*hz);
+                            if result.is_ok() {
+                                self.current_poll_hz = Some(*hz);
+                            }
                             self.apply(result, &format!("Polling rate set to {hz}Hz"));
                         }
                     }
                 });
+                if self.current_poll_hz.is_none() {
+                    ui.label(
+                        egui::RichText::new(
+                            "Couldn't read the device's current polling rate — none shown as selected.",
+                        )
+                        .small()
+                        .color(theme::MUTED),
+                    );
+                }
             }
         });
     }
