@@ -23,20 +23,32 @@ to extend or verify the protocol for a new model.
 
 ## What works today
 
-Two device profiles are included:
+**95 mouse device profiles** are included — run `razer-ctl list-devices`
+for the full list. Every one of them was built the same way: cross-checked
+field-by-field against OpenRazer's kernel driver source
+(`driver/razermouse_driver.c`, `razerchromacommon.c`) and daemon metadata
+(`daemon/openrazer_daemon/hardware/mouse.py`), not guessed from a
+similarly-named model. Each device is its own commit — see `git log` for
+exactly what was added for any specific mouse.
 
-- **Razer Basilisk V3** (wired) — `Confidence::Verified`. DPI, polling
-  rate, Static/Spectrum/Wave LED effects, and brightness are confirmed
-  against real hardware. Breathing and Off are confirmed *rejected* by
-  the firmware itself for this exact model — not a bug, OpenRazer's own
-  driver doesn't attempt them for this PID either. Its bottom/underglow
-  strip (11 individually addressable LEDs) is controllable via the
-  matrix commands below.
-- **Razer Viper Ultimate** (wired/wireless) — `Confidence::Unverified`.
-  Built the same way (cross-checked against OpenRazer's driver source
-  and daemon metadata), but not yet run against real hardware by anyone
+- **Razer Basilisk V3** (wired) is `Confidence::Verified` — DPI, polling
+  rate, Static/Spectrum/Wave LED effects, brightness, and its 11-LED
+  underglow strip are confirmed against real hardware. Breathing and Off
+  are confirmed *rejected* by the firmware itself for this exact model —
+  not a bug, OpenRazer's own driver doesn't attempt them for this PID
+  either.
+- **Every other device is `Confidence::Unverified`** — correct as far as
+  the source supports, but not yet run against real hardware by anyone
   on this project. If you own one, please try it and report back either
-  way.
+  way (see "Adding support for your device" below).
+
+Deliberately **not** included (117 total mouse PIDs exist in OpenRazer;
+22 were excluded, not silently mis-modeled):
+
+- Wireless receivers/dongles (they're not the mouse itself).
+- A handful of very old mice (original DeathAdder/Naga/Orochi-era) that
+  use a completely different byte-indexed DPI protocol this project
+  doesn't model, to avoid shipping a profile that's confidently wrong.
 
 Capabilities modeled so far (per-device, only shown if the device profile
 declares them):
