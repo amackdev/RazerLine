@@ -81,7 +81,7 @@ fn probe_report(profile: &DeviceProfile) -> RazerReport {
             vec![0u8; 2],
         )
         .expect("2-byte probe args never exceed ARGS_LENGTH");
-        report.transaction_id = identity.transaction_id;
+        report.transaction_id = identity.firmware_transaction_id;
         report
     } else if let Some(dpi) = profile.dpi {
         let mut report = RazerReport::new(dpi.command_class, dpi.get_command_id, vec![0u8; 7])
@@ -466,7 +466,11 @@ impl RazerDevice {
             )));
         }
 
-        let mut args = vec![0u8; matrix.write_packet_length as usize];
+        let data_size = match matrix.write_packet_length {
+            crate::devices::MatrixPacketLength::Fixed(n) => n as usize,
+            crate::devices::MatrixPacketLength::Computed => 5 + colors.len() * 3,
+        };
+        let mut args = vec![0u8; data_size];
         args[2] = row;
         args[3] = start_col;
         args[4] = start_col + colors.len() as u8 - 1; // stop_col, inclusive
@@ -524,7 +528,7 @@ impl RazerDevice {
             identity.firmware_command_id,
             vec![0u8; 2],
         )?;
-        report.transaction_id = identity.transaction_id;
+        report.transaction_id = identity.firmware_transaction_id;
         let resp = self.transact(&report)?;
         Ok(format!("v{}.{}", resp.arguments[0], resp.arguments[1]))
     }
@@ -539,7 +543,7 @@ impl RazerDevice {
             identity.serial_command_id,
             vec![0u8; 22],
         )?;
-        report.transaction_id = identity.transaction_id;
+        report.transaction_id = identity.serial_transaction_id;
         let resp = self.transact(&report)?;
         let end = resp
             .arguments

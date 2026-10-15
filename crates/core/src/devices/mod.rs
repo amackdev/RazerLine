@@ -67,7 +67,11 @@ pub struct IdentityProfile {
     pub command_class: u8,
     pub firmware_command_id: u8,
     pub serial_command_id: u8,
-    pub transaction_id: u8,
+    /// Firmware and serial queries are **not guaranteed to share a
+    /// transaction id** — e.g. the Mamba Elite uses 0x1F for firmware but
+    /// 0xFF for serial. Check both independently against the real source.
+    pub firmware_transaction_id: u8,
+    pub serial_transaction_id: u8,
 }
 
 /// A per-pixel addressable LED strip/grid driven by writing one or more
@@ -77,18 +81,27 @@ pub struct IdentityProfile {
 /// [`LedZoneProfile`] — use it for strips with more than one
 /// individually addressable LED (e.g. a mouse's underglow), not for a
 /// single-color zone.
+/// How the "custom frame" write command's declared data length is
+/// computed. OpenRazer's `razer_chroma_extended_matrix_set_custom_frame`
+/// wrapper always passes a fixed 0x47; `..._set_custom_frame2(..., 0)`
+/// (used by a different set of devices, e.g. the Mamba Elite/Naga Pro)
+/// computes it from how many columns are actually being written.
+#[derive(Debug, Clone, Copy)]
+pub enum MatrixPacketLength {
+    Fixed(u8),
+    /// `5 + 3 * columns_written`.
+    Computed,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct MatrixProfile {
     pub rows: u8,
     pub cols: u8,
     pub write_command_class: u8,
     pub write_command_id: u8,
-    /// Total declared data length of the write command. Some devices
-    /// need this fixed regardless of how many columns are actually being
-    /// written (OpenRazer's `razer_chroma_extended_matrix_set_custom_frame`
-    /// always uses 0x47); others compute it from the row length instead.
-    /// Check the real source for your device rather than assuming 0x47.
-    pub write_packet_length: u8,
+    /// How to size the declared data length of the write command. Varies
+    /// by device — check the real source rather than assuming either one.
+    pub write_packet_length: MatrixPacketLength,
     pub write_transaction_id: u8,
     pub commit_command_class: u8,
     pub commit_command_id: u8,

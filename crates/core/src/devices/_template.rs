@@ -42,7 +42,7 @@
 
 use super::{
     Confidence, DeviceKind, DeviceProfile, DpiProfile, IdentityProfile, LedZoneProfile,
-    MatrixProfile, PollRateProfile,
+    MatrixPacketLength, MatrixProfile, PollRateProfile,
 };
 use crate::commands::{CommandClass, CommonLedId, GeneralCommand, LedCommand, MouseCommand};
 use crate::constants::RAZER_VENDOR_ID;
@@ -91,15 +91,16 @@ pub const YOUR_DEVICE: DeviceProfile = DeviceProfile {
     // Uncomment and fill in if your device has a multi-LED addressable
     // strip. `write_packet_length` matters: some devices need a fixed
     // value regardless of how many columns are written (Basilisk V3
-    // uses a fixed 0x47); others compute it from the row length — check
-    // the real source, don't assume.
+    // uses a fixed 0x47); others (e.g. Mamba Elite, Naga Pro) compute it
+    // from the row length (`MatrixPacketLength::Computed`) — check the
+    // real source, don't assume either one.
     //
     // matrix: Some(MatrixProfile {
     //     rows: 1,
     //     cols: 0, // TODO: real LED count, from OpenRazer's MATRIX_DIMS
     //     write_command_class: CommandClass::Led as u8,
     //     write_command_id: LedCommand::SetCustomFrame as u8,
-    //     write_packet_length: 0x47,
+    //     write_packet_length: MatrixPacketLength::Fixed(0x47),
     //     write_transaction_id: TRANSACTION_ID,
     //     commit_command_class: CommandClass::Led as u8,
     //     commit_command_id: LedCommand::SetEffect as u8,
@@ -107,10 +108,13 @@ pub const YOUR_DEVICE: DeviceProfile = DeviceProfile {
     // }),
     matrix: None,
 
+    // Firmware and serial queries can use *different* transaction ids on
+    // the same device (e.g. the Mamba Elite) — don't assume they match.
     identity: Some(IdentityProfile {
         command_class: CommandClass::General as u8,
         firmware_command_id: GeneralCommand::GetFirmwareVersion as u8,
         serial_command_id: GeneralCommand::GetSerial as u8,
-        transaction_id: TRANSACTION_ID,
+        firmware_transaction_id: TRANSACTION_ID,
+        serial_transaction_id: TRANSACTION_ID,
     }),
 };

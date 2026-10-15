@@ -64,7 +64,8 @@ const fn profile(name: &'static str, product_id: u16) -> DeviceProfile {
             command_class: CommandClass::General as u8,
             firmware_command_id: GeneralCommand::GetFirmwareVersion as u8,
             serial_command_id: GeneralCommand::GetSerial as u8,
-            transaction_id: GENERAL_TRANSACTION_ID,
+            firmware_transaction_id: GENERAL_TRANSACTION_ID,
+            serial_transaction_id: GENERAL_TRANSACTION_ID,
         }),
     }
 }
