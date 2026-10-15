@@ -14,7 +14,6 @@ pub struct GuiApp {
 
     dpi_x: u16,
     dpi_y: u16,
-    link_xy: bool,
 
     selected_zone_idx: usize,
     led_color: [u8; 3],
@@ -34,7 +33,6 @@ impl Default for GuiApp {
             status_is_error: false,
             dpi_x: 800,
             dpi_y: 800,
-            link_xy: true,
             selected_zone_idx: 0,
             led_color: [64, 209, 128],
             brightness: 100,
@@ -240,27 +238,15 @@ impl GuiApp {
                 // A slider spanning a device's full DPI range (often
                 // 100-45000) is too coarse to land on an exact value —
                 // type the number directly instead, with presets for the
-                // common values.
-                ui.horizontal(|ui| {
-                    ui.label("X");
-                    ui.add(
-                        egui::DragValue::new(&mut self.dpi_x)
-                            .range(dpi.min..=dpi.max)
-                            .speed(5),
-                    );
-                    ui.add_space(16.0);
-                    ui.label("Y");
-                    ui.add_enabled(
-                        !self.link_xy,
-                        egui::DragValue::new(&mut self.dpi_y)
-                            .range(dpi.min..=dpi.max)
-                            .speed(5),
-                    );
-                });
-                ui.checkbox(&mut self.link_xy, "Lock Y to X");
-                if self.link_xy {
-                    self.dpi_y = self.dpi_x;
-                }
+                // common values. X and Y are kept equal and not exposed
+                // separately; nothing in this UI needs independent axes.
+                ui.add(
+                    egui::DragValue::new(&mut self.dpi_x)
+                        .range(dpi.min..=dpi.max)
+                        .speed(5)
+                        .suffix(" DPI"),
+                );
+                self.dpi_y = self.dpi_x;
 
                 ui.add_space(6.0);
                 ui.horizontal_wrapped(|ui| {
@@ -270,16 +256,13 @@ impl GuiApp {
                         if preset < dpi.min || preset > dpi.max {
                             continue;
                         }
-                        let is_current =
-                            self.dpi_x == preset && (self.link_xy || self.dpi_y == preset);
+                        let is_current = self.dpi_x == preset;
                         if ui
                             .selectable_label(is_current, preset.to_string())
                             .clicked()
                         {
                             self.dpi_x = preset;
-                            if self.link_xy {
-                                self.dpi_y = preset;
-                            }
+                            self.dpi_y = preset;
                         }
                     }
                 });
@@ -288,7 +271,7 @@ impl GuiApp {
                 if ui.button("Apply DPI").clicked() {
                     let (x, y) = (self.dpi_x, self.dpi_y);
                     let result = self.device.as_ref().unwrap().set_dpi(x, y);
-                    self.apply(result, &format!("DPI set to {x}x{y}"));
+                    self.apply(result, &format!("DPI set to {x}"));
                 }
                 ui.add_space(10.0);
             }
