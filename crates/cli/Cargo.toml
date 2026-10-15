@@ -13,4 +13,6 @@ path = "src/main.rs"
 
 [dependencies]
 razer-hid-core = { path = "../core" }
+razer-hid-devices = { path = "../devices" }
+razer-hid-protocol = { path = "../protocol" }
 clap.workspace = true

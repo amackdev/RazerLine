@@ -3,23 +3,20 @@
 //! Not affiliated with or endorsed by Razer Inc. Built from the public
 //! Razer Chroma HID protocol reverse-engineered by the OpenRazer community.
 //!
-//! The crate is split into:
-//! - [`protocol`]: byte-level framing of a Razer HID control report (the
-//!   same for every device).
-//! - [`commands`]: the shared command-class/id vocabulary most Razer mice
-//!   reuse; a starting point for writing device profiles.
-//! - [`devices`]: the registry of supported models — this is where you add
-//!   support for a new device, see README.md's "Adding support for your
-//!   device" and `devices/_template.rs`.
-//! - [`device`]: the generic [`device::RazerDevice`] control handle, driven
-//!   by whichever profile matches the connected hardware.
+//! This crate is the generic control engine: [`device::RazerDevice`] and
+//! the [`profile::DeviceProfile`] shape it's driven by. It depends on
+//! `razer-hid-protocol` for byte-level framing/command vocabulary, but
+//! deliberately knows nothing about any *specific* device — the catalog
+//! of concrete profiles (one per supported model) lives in the separate
+//! `razer-hid-devices` crate, which depends on this one. That split lets
+//! the device database grow independently without the control engine
+//! needing to change.
 
-pub mod commands;
-pub mod constants;
 pub mod device;
-pub mod devices;
-pub mod protocol;
+pub mod profile;
 
-pub use device::{DeviceError, DpiSetting, RazerDevice};
-pub use devices::{DeviceKind, DeviceProfile, KNOWN_DEVICES};
-pub use protocol::{ProtocolError, RazerReport};
+pub use device::{DeviceError, DpiSetting, InterfaceInfo, RazerDevice};
+pub use profile::{
+    Confidence, DeviceKind, DeviceProfile, DpiProfile, IdentityProfile, LedZoneProfile,
+    MatrixPacketLength, MatrixProfile, PollRateProfile,
+};

@@ -2679,6 +2679,8 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "razer-hid-core",
+ "razer-hid-devices",
+ "razer-hid-protocol",
 ]
 
 [[package]]
@@ -2686,7 +2688,16 @@ name = "razer-hid-core"
 version = "0.1.0"
 dependencies = [
  "hidapi",
+ "razer-hid-protocol",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "razer-hid-devices"
+version = "0.1.0"
+dependencies = [
+ "razer-hid-core",
+ "razer-hid-protocol",
 ]
 
 [[package]]
@@ -2695,6 +2706,15 @@ version = "0.1.0"
 dependencies = [
  "eframe",
  "razer-hid-core",
+ "razer-hid-devices",
+ "razer-hid-protocol",
+]
+
+[[package]]
+name = "razer-hid-protocol"
+version = "0.1.0"
+dependencies = [
+ "thiserror 1.0.69",
 ]
 
 [[package]]

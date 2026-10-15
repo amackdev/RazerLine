@@ -11,8 +11,8 @@ use std::time::{Duration, Instant};
 const INTER_ZONE_DELAY: Duration = Duration::from_millis(60);
 
 use eframe::egui;
-use razer_hid_core::devices::{DeviceProfile, LedZoneProfile};
-use razer_hid_core::RazerDevice;
+use razer_hid_core::{DeviceProfile, LedZoneProfile, RazerDevice};
+use razer_hid_devices::KNOWN_DEVICES;
 
 use crate::theme;
 use crate::widgets::{self, PreviewKind};
@@ -84,7 +84,7 @@ impl GuiApp {
     /// handle on every tick: only touches `self.device` when the active
     /// device actually disappeared or something new needs auto-selecting.
     fn rescan(&mut self) {
-        let found = match RazerDevice::list_connected() {
+        let found = match RazerDevice::list_connected(KNOWN_DEVICES) {
             Ok(found) => found,
             Err(e) => {
                 self.set_status(format!("Scan error: {e}"), true);
@@ -458,7 +458,7 @@ impl GuiApp {
 
             let has_matrix = profile.matrix.is_some();
             let matrix_has_effects = profile.matrix.and_then(|m| m.effect_led_id).is_some();
-            let supports = |effect: razer_hid_core::commands::LedEffect| {
+            let supports = |effect: razer_hid_protocol::commands::LedEffect| {
                 !profile.unsupported_led_effects.contains(&effect)
             };
 
@@ -527,7 +527,7 @@ impl GuiApp {
                         "LED set to static color",
                     );
                 }
-                if supports(razer_hid_core::commands::LedEffect::Breathing)
+                if supports(razer_hid_protocol::commands::LedEffect::Breathing)
                     && ui.button("Breathing").clicked()
                 {
                     let color = self.led_color;

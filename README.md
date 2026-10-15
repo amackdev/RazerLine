@@ -79,18 +79,31 @@ so one codebase covers all three.
 
 ```
 crates/
-  core/   razer-hid-core   — protocol framing, command vocabulary, device
-                             registry, generic control logic
-  cli/    razer-hid-cli    — `razer-ctl` command-line tool
-  gui/    razer-hid-gui    — `razerline` desktop control panel (egui)
+  protocol/  razer-hid-protocol — byte-level report framing/CRC, command
+                                   vocabulary. No transport dependency.
+  core/      razer-hid-core     — RazerDevice control engine + DeviceProfile
+                                   shape, built on razer-hid-protocol. Knows
+                                   nothing about any specific device model.
+  devices/   razer-hid-devices  — the registry of supported models (one
+                                   DeviceProfile per file), built on
+                                   razer-hid-core's types.
+  cli/       razer-hid-cli      — `razer-ctl` command-line tool
+  gui/       razer-hid-gui      — `razerline` desktop control panel (egui)
 assets/   razer-inspired-logo.svg — original artwork, not Razer's mark
 udev/     Linux udev rule for non-root HID access
 .github/workflows/  CI: fmt/clippy/build/test on Linux, Windows, macOS
 ```
 
+Dependencies only point one way: `protocol ← core ← devices ← {cli, gui}`.
+Core never depends on the device registry — `RazerDevice::list_connected`/
+`open_first_supported` take a `&'static [DeviceProfile]` slice as an
+argument rather than reaching for a baked-in list, so the control engine
+stays usable (and testable) without the whole 90+ device database, and
+the database can grow independently without touching core.
+
 The CLI and GUI are both written generically against
-`crates/core/src/devices::DeviceProfile` — neither one hardcodes "Basilisk
-V3" anywhere. Adding a new device to the registry makes it show up in both
+`razer_hid_core::DeviceProfile` — neither one hardcodes "Basilisk V3"
+anywhere. Adding a new device to the registry makes it show up in both
 automatically, with only the capabilities that device actually declares.
 
 ## Building
@@ -174,7 +187,7 @@ without touching layout code.
 
 ## Adding support for your device
 
-1. Copy `crates/core/src/devices/_template.rs` to a new file named after
+1. Copy `crates/devices/src/_template.rs` to a new file named after
    your device (e.g. `deathadder_v3.rs`) — it has inline comments
    explaining each field.
 2. Find your device's USB vendor/product id (`lsusb -d 1532:` on Linux,
@@ -195,7 +208,7 @@ without touching layout code.
    Windows) and diff it against what this project sends.
 5. Set `confidence: Confidence::Verified` only for capabilities you
    personally tested working. Leave the rest `Unverified`.
-6. Register it in `crates/core/src/devices/mod.rs` (`mod` + `pub use` +
+6. Register it in `crates/devices/src/lib.rs` (`mod` + `pub use` +
    add to `KNOWN_DEVICES`).
 7. Run `cargo fmt --all`, `cargo clippy --workspace --all-targets`, and
    `cargo test --workspace` — CI runs the same checks on Linux/Windows/

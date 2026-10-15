@@ -1,0 +1,11 @@
+[package]
+name = "razer-hid-protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Byte-level Razer HID control-report protocol framing and command vocabulary"
+
+[dependencies]
+thiserror.workspace = true

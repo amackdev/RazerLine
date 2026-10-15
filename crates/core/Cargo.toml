@@ -8,5 +8,6 @@ authors.workspace = true
 description = "Unofficial HID protocol + multi-device control library for Razer peripherals"
 
 [dependencies]
+razer-hid-protocol = { path = "../protocol" }
 hidapi.workspace = true
 thiserror.workspace = true

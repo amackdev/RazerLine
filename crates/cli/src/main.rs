@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
-use razer_hid_core::devices::{DeviceProfile, KNOWN_DEVICES};
-use razer_hid_core::RazerDevice;
+use razer_hid_core::{DeviceProfile, RazerDevice};
+use razer_hid_devices::KNOWN_DEVICES;
 
 #[derive(Parser)]
 #[command(
@@ -122,7 +122,7 @@ fn hex_rgb(value: &str) -> Result<[u8; 3], String> {
 }
 
 fn select_profile(name: Option<&str>) -> Result<&'static DeviceProfile, String> {
-    let connected = RazerDevice::list_connected().map_err(|e| e.to_string())?;
+    let connected = RazerDevice::list_connected(KNOWN_DEVICES).map_err(|e| e.to_string())?;
     match name {
         Some(needle) => connected
             .into_iter()
@@ -135,10 +135,7 @@ fn select_profile(name: Option<&str>) -> Result<&'static DeviceProfile, String> 
     }
 }
 
-fn find_zone(
-    dev: &RazerDevice,
-    name: &str,
-) -> Result<razer_hid_core::devices::LedZoneProfile, String> {
+fn find_zone(dev: &RazerDevice, name: &str) -> Result<razer_hid_core::LedZoneProfile, String> {
     dev.led_zones()
         .iter()
         .find(|z| z.name.to_lowercase() == name.to_lowercase())
@@ -205,7 +202,7 @@ fn run(cli: Cli) -> Result<(), String> {
 }
 
 fn list_devices() -> Result<(), String> {
-    let connected = RazerDevice::list_connected().map_err(|e| e.to_string())?;
+    let connected = RazerDevice::list_connected(KNOWN_DEVICES).map_err(|e| e.to_string())?;
     for profile in KNOWN_DEVICES {
         let status = if connected.iter().any(|c| c.product_id == profile.product_id) {
             "connected"
@@ -218,8 +215,9 @@ fn list_devices() -> Result<(), String> {
 }
 
 fn debug_usb() -> Result<(), String> {
-    let interfaces = RazerDevice::debug_list_interfaces(razer_hid_core::constants::RAZER_VENDOR_ID)
-        .map_err(|e| e.to_string())?;
+    let interfaces =
+        RazerDevice::debug_list_interfaces(razer_hid_protocol::constants::RAZER_VENDOR_ID)
+            .map_err(|e| e.to_string())?;
     if interfaces.is_empty() {
         println!("No HID interfaces found under vendor id 0x1532 (Razer). Is anything plugged in?");
         return Ok(());

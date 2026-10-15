@@ -1,0 +1,12 @@
+[package]
+name = "razer-hid-devices"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Catalog of DeviceProfile definitions for supported Razer peripherals"
+
+[dependencies]
+razer-hid-core = { path = "../core" }
+razer-hid-protocol = { path = "../protocol" }
