@@ -26,6 +26,12 @@ pub enum DeviceError {
     Rejected { class: u8, id: u8 },
     #[error("command class=0x{class:02x} id=0x{id:02x} not supported by this firmware")]
     NotSupported { class: u8, id: u8 },
+    #[error(
+        "class=0x{class:02x} id=0x{id:02x}: device never confirmed this command after 5 \
+         attempts (last response status=0x{status:02x}) — it may be accepted at the USB \
+         level but not actually processed by the firmware for this command"
+    )]
+    UnconfirmedCommand { class: u8, id: u8, status: u8 },
     #[error("value out of range: {0}")]
     OutOfRange(String),
     #[error("{0} is not supported by {1}")]
@@ -180,29 +186,83 @@ impl RazerDevice {
             .collect())
     }
 
+    /// Mirrors OpenRazer's `razer_send_payload` retry loop exactly (see
+    /// `driver/razermouse_driver.c`): on each of up to 5 attempts, resend
+    /// the full command, then read back a response and accept it only if
+    /// it actually echoes the same command class/id (not a stale or
+    /// all-zero buffer left over from something else) AND its status is
+    /// `SUCCESSFUL` or `BUSY` — OpenRazer treats "busy" as success too.
+    /// Anything else retries. This matters because a naive "anything
+    /// except FAILURE/NOT_SUPPORTED is fine" check (what this used to do)
+    /// treats a stale status=0x00 readback as success, which looks like
+    /// the command worked right up until you check the hardware and
+    /// nothing happened.
     fn transact(&self, report: &RazerReport) -> Result<RazerReport, DeviceError> {
         let payload = report.pack();
-        self.hid.send_feature_report(&payload)?;
+        let mut last_response: Option<RazerReport> = None;
+        let mut last_err: Option<DeviceError> = None;
 
-        // Give the device a moment to process before polling the response.
-        sleep(Duration::from_millis(10));
+        for _ in 0..5 {
+            if let Err(e) = self.hid.send_feature_report(&payload) {
+                last_err = Some(e.into());
+                sleep(Duration::from_millis(10));
+                continue;
+            }
 
-        let mut buf = [0u8; REPORT_LENGTH];
-        buf[0] = 0x00; // report id to fetch
-        let n = self.hid.get_feature_report(&mut buf)?;
-        let response = RazerReport::unpack(&buf[..n])?;
+            sleep(Duration::from_millis(10));
 
-        match response.status {
-            STATUS_FAILURE => Err(DeviceError::Rejected {
-                class: report.command_class,
-                id: report.command_id,
-            }),
-            STATUS_NOT_SUPPORTED => Err(DeviceError::NotSupported {
-                class: report.command_class,
-                id: report.command_id,
-            }),
-            _ => Ok(response),
+            let mut buf = [0u8; REPORT_LENGTH];
+            buf[0] = 0x00; // report id to fetch
+            let response = match self.hid.get_feature_report(&mut buf) {
+                Ok(n) => match RazerReport::unpack(&buf[..n]) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        last_err = Some(e.into());
+                        sleep(Duration::from_millis(10));
+                        continue;
+                    }
+                },
+                Err(e) => {
+                    last_err = Some(e.into());
+                    sleep(Duration::from_millis(10));
+                    continue;
+                }
+            };
+
+            let echoes_request = response.command_class == report.command_class
+                && response.command_id == report.command_id;
+
+            if echoes_request && matches!(response.status, STATUS_SUCCESSFUL | STATUS_BUSY) {
+                return Ok(response);
+            }
+
+            last_response = Some(response);
+            sleep(Duration::from_millis(10));
         }
+
+        if let Some(response) = last_response {
+            return Err(match response.status {
+                STATUS_FAILURE => DeviceError::Rejected {
+                    class: report.command_class,
+                    id: report.command_id,
+                },
+                STATUS_NOT_SUPPORTED => DeviceError::NotSupported {
+                    class: report.command_class,
+                    id: report.command_id,
+                },
+                other => DeviceError::UnconfirmedCommand {
+                    class: report.command_class,
+                    id: report.command_id,
+                    status: other,
+                },
+            });
+        }
+
+        Err(last_err.unwrap_or(DeviceError::UnconfirmedCommand {
+            class: report.command_class,
+            id: report.command_id,
+            status: 0xFF,
+        }))
     }
 
     // -- DPI -----------------------------------------------------------
