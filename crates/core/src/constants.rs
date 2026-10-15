@@ -9,8 +9,11 @@
 /// USB vendor id Razer Inc. registers all of its peripherals under.
 pub const RAZER_VENDOR_ID: u16 = 0x1532;
 
-/// Total bytes in a Razer control report, including the leading report id.
-pub const REPORT_LENGTH: usize = 90;
+/// Total bytes in the buffer handed to hidapi: the 1-byte report-id
+/// prefix hidapi/Windows require, plus OpenRazer's 90-byte
+/// `struct razer_report` (which itself has no report-id field — see
+/// `protocol.rs`).
+pub const REPORT_LENGTH: usize = 91;
 pub const ARGS_LENGTH: usize = 80;
 
 pub const STATUS_NEW_COMMAND: u8 = 0x00;
