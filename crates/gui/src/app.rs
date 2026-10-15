@@ -71,6 +71,13 @@ impl GuiApp {
     fn open(&mut self, profile: &'static DeviceProfile) {
         match RazerDevice::open(profile) {
             Ok(dev) => {
+                // Show the device's actual current DPI rather than a
+                // hardcoded guess — if the query isn't supported or fails,
+                // just keep whatever was there before.
+                if let Ok(current) = dev.get_dpi() {
+                    self.dpi_x = current.x;
+                    self.dpi_y = current.y;
+                }
                 self.active_pid = Some(profile.product_id);
                 self.device = Some(dev);
                 self.info_text = None;
@@ -229,15 +236,55 @@ impl GuiApp {
         widgets::card(ui, "Performance", |ui| {
             if let Some(dpi) = profile.dpi {
                 ui.label(egui::RichText::new("DPI").color(theme::MUTED).small());
-                ui.add(egui::Slider::new(&mut self.dpi_x, dpi.min..=dpi.max).text("X"));
+
+                // A slider spanning a device's full DPI range (often
+                // 100-45000) is too coarse to land on an exact value —
+                // type the number directly instead, with presets for the
+                // common values.
+                ui.horizontal(|ui| {
+                    ui.label("X");
+                    ui.add(
+                        egui::DragValue::new(&mut self.dpi_x)
+                            .range(dpi.min..=dpi.max)
+                            .speed(5),
+                    );
+                    ui.add_space(16.0);
+                    ui.label("Y");
+                    ui.add_enabled(
+                        !self.link_xy,
+                        egui::DragValue::new(&mut self.dpi_y)
+                            .range(dpi.min..=dpi.max)
+                            .speed(5),
+                    );
+                });
                 ui.checkbox(&mut self.link_xy, "Lock Y to X");
                 if self.link_xy {
                     self.dpi_y = self.dpi_x;
                 }
-                ui.add_enabled(
-                    !self.link_xy,
-                    egui::Slider::new(&mut self.dpi_y, dpi.min..=dpi.max).text("Y"),
-                );
+
+                ui.add_space(6.0);
+                ui.horizontal_wrapped(|ui| {
+                    const PRESETS: [u16; 9] =
+                        [400, 800, 1200, 1600, 2400, 3200, 6400, 12800, 16000];
+                    for preset in PRESETS {
+                        if preset < dpi.min || preset > dpi.max {
+                            continue;
+                        }
+                        let is_current =
+                            self.dpi_x == preset && (self.link_xy || self.dpi_y == preset);
+                        if ui
+                            .selectable_label(is_current, preset.to_string())
+                            .clicked()
+                        {
+                            self.dpi_x = preset;
+                            if self.link_xy {
+                                self.dpi_y = preset;
+                            }
+                        }
+                    }
+                });
+
+                ui.add_space(8.0);
                 if ui.button("Apply DPI").clicked() {
                     let (x, y) = (self.dpi_x, self.dpi_y);
                     let result = self.device.as_ref().unwrap().set_dpi(x, y);
