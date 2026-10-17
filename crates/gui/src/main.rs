@@ -10,7 +10,11 @@
 
 mod app;
 mod autostart;
+mod buttons;
 mod config;
+mod input_hook;
+mod mouse_3d;
+mod profiles;
 mod theme;
 mod tray;
 mod widgets;

@@ -6,6 +6,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
+use crate::profiles::DeviceProfileConfig;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -52,6 +53,40 @@ pub struct DeviceConfig {
     pub sync_zones: Option<bool>,
     pub effect: Option<String>,
     pub matrix_color: Option<[u8; 3]>,
+    #[serde(default)]
+    pub profile_data: Option<DeviceProfileConfig>,
+}
+
+impl DeviceConfig {
+    pub fn ensure_profiles(&mut self) -> &mut DeviceProfileConfig {
+        if self.profile_data.is_none() {
+            let mut def = DeviceProfileConfig::default();
+            let p = def.active_profile_mut();
+            if let Some(dpi) = self.dpi_x {
+                p.dpi = dpi;
+            }
+            if let Some(rate) = self.poll_rate_hz {
+                p.poll_rate_hz = Some(rate);
+            }
+            if let Some(b) = self.brightness {
+                p.brightness = b;
+            }
+            if let Some(c) = self.led_color {
+                p.led_color = c;
+            }
+            if let Some(s) = self.sync_zones {
+                p.sync_zones = s;
+            }
+            if let Some(ref eff) = self.effect {
+                p.effect = eff.clone();
+            }
+            if let Some(m) = self.matrix_color {
+                p.matrix_color = Some(m);
+            }
+            self.profile_data = Some(def);
+        }
+        self.profile_data.as_mut().unwrap()
+    }
 }
 
 impl AppConfig {
@@ -101,8 +136,7 @@ impl AppConfig {
         &mut self,
         pid: u16,
         name: &str,
-        dpi_x: u16,
-        dpi_y: u16,
+        dpi: u16,
         poll_rate: Option<u32>,
         brightness: u8,
         led_color: [u8; 3],
@@ -115,13 +149,26 @@ impl AppConfig {
             ..Default::default()
         });
         entry.name = name.to_string();
-        entry.dpi_x = Some(dpi_x);
-        entry.dpi_y = Some(dpi_y);
+        entry.dpi_x = Some(dpi);
+        entry.dpi_y = Some(dpi);
         entry.poll_rate_hz = poll_rate;
         entry.brightness = Some(brightness);
         entry.led_color = Some(led_color);
         entry.sync_zones = Some(sync_zones);
-        entry.effect = effect;
+        entry.effect = effect.clone();
         entry.matrix_color = matrix_color;
+
+        let prof = entry.ensure_profiles().active_profile_mut();
+        prof.dpi = dpi;
+        prof.poll_rate_hz = poll_rate;
+        prof.brightness = brightness;
+        prof.led_color = led_color;
+        prof.sync_zones = sync_zones;
+        if let Some(eff) = effect {
+            prof.effect = eff;
+        }
+        if let Some(m) = matrix_color {
+            prof.matrix_color = Some(m);
+        }
     }
 }

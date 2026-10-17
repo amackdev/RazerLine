@@ -15,6 +15,7 @@ path = "src/main.rs"
 razer-hid-abi = { path = "../abi" }
 razer-hid-client = { path = "../client" }
 eframe = "0.28"
+egui_extras = { version = "0.28", features = ["svg", "image"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
 tray-icon = "0.26.1"
 muda = "0.21.2"

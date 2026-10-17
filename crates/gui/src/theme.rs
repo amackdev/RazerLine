@@ -18,10 +18,10 @@ pub fn apply(ctx: &egui::Context) {
     visuals.panel_fill = APP_BG;
     visuals.window_fill = APP_BG;
     visuals.extreme_bg_color = SIDEBAR_BG;
-    visuals.selection.bg_fill = ACCENT;
-    visuals.selection.stroke.color = Color32::BLACK;
+    visuals.selection.bg_fill = Color32::from_rgba_unmultiplied(64, 209, 128, 45);
+    visuals.selection.stroke = egui::Stroke::new(1.0_f32, ACCENT);
     visuals.widgets.hovered.bg_fill = CARD_BG_HOVER;
-    visuals.widgets.active.bg_fill = ACCENT;
+    visuals.widgets.active.bg_fill = Color32::from_rgb(28, 58, 40);
     ctx.set_visuals(visuals);
 
     let mut style = (*ctx.style()).clone();
