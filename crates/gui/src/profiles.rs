@@ -87,6 +87,12 @@ pub struct UserProfile {
     pub button_mappings: HashMap<MouseButtonId, ButtonAction>,
 }
 
+impl Default for UserProfile {
+    fn default() -> Self {
+        Self::new_default("Default")
+    }
+}
+
 impl UserProfile {
     pub fn new_default(name: &str) -> Self {
         let mut buttons = HashMap::new();
@@ -124,5 +130,146 @@ impl UserProfile {
         if id.is_configurable() {
             self.button_mappings.insert(id, action);
         }
+    }
+
+    /// Sets the number of DPI stages, clamped between 1 and 5.
+    pub fn set_stage_count(&mut self, count: usize, min_dpi: u16, max_dpi: u16) {
+        let count = count.clamp(1, 5);
+        if count == self.dpi_stages.len() {
+            return;
+        }
+        if count < self.dpi_stages.len() {
+            self.dpi_stages.truncate(count);
+            if self.current_stage_idx >= count {
+                self.current_stage_idx = count.saturating_sub(1);
+            }
+        } else {
+            while self.dpi_stages.len() < count {
+                let last = self.dpi_stages.last().copied().unwrap_or(1600);
+                let next = (last.saturating_add(800)).min(max_dpi).max(min_dpi);
+                self.dpi_stages.push(next);
+            }
+        }
+        self.dpi = self.dpi_stages[self.current_stage_idx];
+    }
+
+    /// Sets the DPI value for a specific stage index.
+    pub fn set_stage_dpi(&mut self, idx: usize, dpi: u16) {
+        if idx < self.dpi_stages.len() {
+            self.dpi_stages[idx] = dpi;
+            if self.current_stage_idx == idx {
+                self.dpi = dpi;
+            }
+        }
+    }
+
+    /// Adds a new stage (up to 5 stages maximum).
+    pub fn add_stage(&mut self, min_dpi: u16, max_dpi: u16) -> bool {
+        if self.dpi_stages.len() >= 5 {
+            return false;
+        }
+        let last = self.dpi_stages.last().copied().unwrap_or(1600);
+        let next = (last.saturating_add(800)).min(max_dpi).max(min_dpi);
+        self.dpi_stages.push(next);
+        true
+    }
+
+    /// Removes a stage by index (keeping at least 1 stage).
+    pub fn remove_stage(&mut self, idx: usize) -> bool {
+        if self.dpi_stages.len() <= 1 || idx >= self.dpi_stages.len() {
+            return false;
+        }
+        self.dpi_stages.remove(idx);
+        if self.current_stage_idx >= self.dpi_stages.len() {
+            self.current_stage_idx = self.dpi_stages.len().saturating_sub(1);
+        }
+        self.dpi = self.dpi_stages[self.current_stage_idx];
+        true
+    }
+
+    /// Sorts stages in ascending order while keeping the current DPI active.
+    pub fn sort_stages(&mut self) {
+        let current_dpi = self.dpi;
+        self.dpi_stages.sort_unstable();
+        if let Some(pos) = self.dpi_stages.iter().position(|&s| s == current_dpi) {
+            self.current_stage_idx = pos;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_profile_stages() {
+        let p = UserProfile::default();
+        assert_eq!(p.dpi_stages, vec![400, 800, 1600, 3200, 6400]);
+        assert_eq!(p.current_stage_idx, 2);
+        assert_eq!(p.dpi, 1600);
+    }
+
+    #[test]
+    fn test_stage_count_adjustment() {
+        let mut p = UserProfile::default();
+        p.set_stage_count(3, 100, 20000);
+        assert_eq!(p.dpi_stages.len(), 3);
+        assert_eq!(p.dpi_stages, vec![400, 800, 1600]);
+        assert_eq!(p.current_stage_idx, 2);
+        assert_eq!(p.dpi, 1600);
+
+        p.set_stage_count(2, 100, 20000);
+        assert_eq!(p.dpi_stages.len(), 2);
+        assert_eq!(p.current_stage_idx, 1);
+        assert_eq!(p.dpi, 800);
+
+        p.set_stage_count(4, 100, 20000);
+        assert_eq!(p.dpi_stages.len(), 4);
+    }
+
+    #[test]
+    fn test_stage_dpi_edits() {
+        let mut p = UserProfile::default();
+        p.set_stage_dpi(2, 1800);
+        assert_eq!(p.dpi_stages[2], 1800);
+        assert_eq!(p.dpi, 1800);
+
+        p.set_stage_dpi(0, 500);
+        assert_eq!(p.dpi_stages[0], 500);
+        assert_eq!(p.dpi, 1800); // active was stage 2, untouched
+    }
+
+    #[test]
+    fn test_add_and_remove_stages() {
+        let mut p = UserProfile::default();
+        assert!(!p.add_stage(100, 20000)); // already at max 5
+
+        assert!(p.remove_stage(0)); // remove 400
+        assert_eq!(p.dpi_stages.len(), 4);
+        assert_eq!(p.dpi_stages, vec![800, 1600, 3200, 6400]);
+
+        assert!(p.add_stage(100, 20000));
+        assert_eq!(p.dpi_stages.len(), 5);
+
+        // Remove down to 1
+        p.remove_stage(0);
+        p.remove_stage(0);
+        p.remove_stage(0);
+        p.remove_stage(0);
+        assert_eq!(p.dpi_stages.len(), 1);
+        assert!(!p.remove_stage(0)); // cannot remove last remaining stage
+    }
+
+    #[test]
+    fn test_sort_stages() {
+        let mut p = UserProfile::default();
+        p.dpi_stages = vec![3200, 400, 1600];
+        p.current_stage_idx = 0;
+        p.dpi = 3200;
+
+        p.sort_stages();
+        assert_eq!(p.dpi_stages, vec![400, 1600, 3200]);
+        assert_eq!(p.current_stage_idx, 2);
+        assert_eq!(p.dpi, 3200);
     }
 }

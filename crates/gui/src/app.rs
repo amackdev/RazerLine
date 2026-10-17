@@ -762,6 +762,158 @@ impl GuiApp {
         let _ = self.config.save();
     }
 
+    /// Updates the configured DPI value for a specific stage index in the cycle.
+    pub fn set_dpi_stage_value(&mut self, stage_idx: usize, new_dpi: u16) {
+        let Some(pid) = self.active_pid else { return };
+
+        let is_current = {
+            let dev_entry = self.config.devices.entry(pid).or_default();
+            let prof = dev_entry.ensure_profiles().active_profile_mut();
+            if stage_idx >= prof.dpi_stages.len() {
+                return;
+            }
+            prof.set_stage_dpi(stage_idx, new_dpi);
+            let is_curr = prof.current_stage_idx == stage_idx;
+            *self.runtime_state.dpi_stages.write().unwrap() = prof.dpi_stages.clone();
+            is_curr
+        };
+
+        let _ = self.config.save();
+
+        if is_current {
+            self.dpi_x = new_dpi;
+            self.dpi_y = new_dpi;
+            self.custom_dpi_input = new_dpi as u32;
+            self.runtime_state.current_dpi.store(new_dpi, Ordering::SeqCst);
+            let r = {
+                let dev_guard = self.runtime_state.device.lock().unwrap();
+                let Some(dev) = dev_guard.as_ref() else { return };
+                dev.set_dpi(new_dpi, new_dpi)
+            };
+            crate::osd::show_dpi(new_dpi);
+            self.apply(r, &format!("Stage {} DPI updated to {} DPI", stage_idx + 1, new_dpi));
+        } else {
+            self.set_status(format!("Stage {} DPI set to {} DPI", stage_idx + 1, new_dpi), false);
+        }
+    }
+
+    /// Sets the number of DPI stages in the cycle (between 1 and 5).
+    pub fn set_dpi_stage_count(&mut self, count: usize, min_dpi: u16, max_dpi: u16) {
+        let Some(pid) = self.active_pid else { return };
+
+        let (new_stages, new_idx, new_dpi) = {
+            let dev_entry = self.config.devices.entry(pid).or_default();
+            let prof = dev_entry.ensure_profiles().active_profile_mut();
+            prof.set_stage_count(count, min_dpi, max_dpi);
+            (prof.dpi_stages.clone(), prof.current_stage_idx, prof.dpi)
+        };
+
+        self.dpi_x = new_dpi;
+        self.dpi_y = new_dpi;
+        self.custom_dpi_input = new_dpi as u32;
+
+        *self.runtime_state.dpi_stages.write().unwrap() = new_stages;
+        self.runtime_state.current_stage_idx.store(new_idx, Ordering::SeqCst);
+        self.runtime_state.current_dpi.store(new_dpi, Ordering::SeqCst);
+
+        let _ = self.config.save();
+
+        let r = {
+            let dev_guard = self.runtime_state.device.lock().unwrap();
+            let Some(dev) = dev_guard.as_ref() else { return };
+            dev.set_dpi(new_dpi, new_dpi)
+        };
+        crate::osd::show_dpi(new_dpi);
+        self.apply(r, &format!("Configured {count} sensitivity stages"));
+    }
+
+    /// Adds a new DPI stage to the cycle (up to 5 max).
+    pub fn add_dpi_stage(&mut self, min_dpi: u16, max_dpi: u16) {
+        let Some(pid) = self.active_pid else { return };
+        let dev_entry = self.config.devices.entry(pid).or_default();
+        let prof = dev_entry.ensure_profiles().active_profile_mut();
+        if prof.add_stage(min_dpi, max_dpi) {
+            *self.runtime_state.dpi_stages.write().unwrap() = prof.dpi_stages.clone();
+            let new_len = prof.dpi_stages.len();
+            let new_dpi = *prof.dpi_stages.last().unwrap();
+            let _ = self.config.save();
+            self.set_status(format!("Added Stage {new_len}: {new_dpi} DPI"), false);
+        }
+    }
+
+    /// Removes a DPI stage from the cycle by index (keeps at least 1).
+    pub fn remove_dpi_stage(&mut self, stage_idx: usize) {
+        let Some(pid) = self.active_pid else { return };
+
+        let (new_stages, new_idx, new_dpi) = {
+            let dev_entry = self.config.devices.entry(pid).or_default();
+            let prof = dev_entry.ensure_profiles().active_profile_mut();
+            if !prof.remove_stage(stage_idx) {
+                return;
+            }
+            (prof.dpi_stages.clone(), prof.current_stage_idx, prof.dpi)
+        };
+
+        self.dpi_x = new_dpi;
+        self.dpi_y = new_dpi;
+        self.custom_dpi_input = new_dpi as u32;
+
+        *self.runtime_state.dpi_stages.write().unwrap() = new_stages;
+        self.runtime_state.current_stage_idx.store(new_idx, Ordering::SeqCst);
+        self.runtime_state.current_dpi.store(new_dpi, Ordering::SeqCst);
+
+        let _ = self.config.save();
+
+        let r = {
+            let dev_guard = self.runtime_state.device.lock().unwrap();
+            let Some(dev) = dev_guard.as_ref() else { return };
+            dev.set_dpi(new_dpi, new_dpi)
+        };
+        crate::osd::show_dpi(new_dpi);
+        self.apply(r, &format!("Stage removed. Active: Stage {}: {} DPI", new_idx + 1, new_dpi));
+    }
+
+    /// Sorts all DPI stages from lowest to highest.
+    pub fn sort_dpi_stages(&mut self) {
+        let Some(pid) = self.active_pid else { return };
+        let dev_entry = self.config.devices.entry(pid).or_default();
+        let prof = dev_entry.ensure_profiles().active_profile_mut();
+        prof.sort_stages();
+
+        *self.runtime_state.dpi_stages.write().unwrap() = prof.dpi_stages.clone();
+        self.runtime_state.current_stage_idx.store(prof.current_stage_idx, Ordering::SeqCst);
+        let _ = self.config.save();
+        self.set_status("Sorted DPI stages from low to high", false);
+    }
+
+    /// Resets DPI stages to factory defaults (400, 800, 1600, 3200, 6400).
+    pub fn reset_dpi_stages_to_default(&mut self) {
+        let Some(pid) = self.active_pid else { return };
+        let dev_entry = self.config.devices.entry(pid).or_default();
+        let prof = dev_entry.ensure_profiles().active_profile_mut();
+        prof.dpi_stages = vec![400, 800, 1600, 3200, 6400];
+        prof.current_stage_idx = 2;
+        prof.dpi = 1600;
+
+        self.dpi_x = 1600;
+        self.dpi_y = 1600;
+        self.custom_dpi_input = 1600;
+
+        *self.runtime_state.dpi_stages.write().unwrap() = prof.dpi_stages.clone();
+        self.runtime_state.current_stage_idx.store(2, Ordering::SeqCst);
+        self.runtime_state.current_dpi.store(1600, Ordering::SeqCst);
+
+        let _ = self.config.save();
+
+        let r = {
+            let dev_guard = self.runtime_state.device.lock().unwrap();
+            let Some(dev) = dev_guard.as_ref() else { return };
+            dev.set_dpi(1600, 1600)
+        };
+        crate::osd::show_dpi(1600);
+        self.apply(r, "Reset DPI stages to defaults (400, 800, 1600, 3200, 6400)");
+    }
+
     /// Cycles the active profile (triggered by profile switch button).
     pub fn cycle_active_profile(&mut self) {
         let Some(pid) = self.active_pid else { return };
@@ -1322,10 +1474,25 @@ impl GuiApp {
                 if ui.button("DPI Stage Down").clicked() {
                     new_action = Some(ButtonAction::Sensitivity(SensitivityAction::DpiDown));
                 }
-                if ui.button("Sniper Clutch (400 DPI)").clicked() {
-                    new_action = Some(ButtonAction::Sensitivity(SensitivityAction::SniperClutch { clutch_dpi: 400 }));
+            });
+
+            ui.horizontal_wrapped(|ui| {
+                ui.label(egui::RichText::new("Sniper Clutch:").small().color(theme::MUTED));
+                for clutch_dpi in [200, 400, 800] {
+                    if ui.button(format!("{clutch_dpi} DPI")).clicked() {
+                        new_action = Some(ButtonAction::Sensitivity(SensitivityAction::SniperClutch { clutch_dpi }));
+                    }
                 }
             });
+
+            if matches!(current_action, ButtonAction::Sensitivity(SensitivityAction::CycleDpi)) {
+                let stage_seq = prof.dpi_stages.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(" ➔ ");
+                ui.label(
+                    egui::RichText::new(format!("Configured Sequence: [ {stage_seq} ] DPI"))
+                        .small()
+                        .color(theme::ACCENT),
+                );
+            }
 
             ui.add_space(8.0);
             ui.separator();
@@ -1403,29 +1570,189 @@ impl GuiApp {
         ui.add_space(14.0);
 
         if let Some(dpi) = profile.dpi {
-            widgets::card(ui, "Sensitivity (DPI)", |ui| {
+            widgets::card(ui, "Sensitivity Stages (DPI Cycle)", |ui| {
+                let Some(pid) = self.active_pid else { return };
+
+                let (dpi_stages, current_idx) = {
+                    let dev_entry = self.config.devices.entry(pid).or_default();
+                    let prof = dev_entry.ensure_profiles().active_profile();
+                    (prof.dpi_stages.clone(), prof.current_stage_idx)
+                };
+
+                // Number of Stages selector bar (Razer Synapse style: 1 to 5 stages)
                 ui.horizontal(|ui| {
-                    ui.label("DPI Value:");
+                    ui.label(egui::RichText::new("Number of Stages:").strong().color(Color32::WHITE));
+                    ui.add_space(8.0);
+                    for count in 1..=5 {
+                        let is_curr = dpi_stages.len() == count;
+                        if ui.selectable_label(is_curr, format!("{count}")).clicked() {
+                            self.set_dpi_stage_count(count, dpi.min, dpi.max);
+                        }
+                    }
+                    ui.add_space(16.0);
+                    if ui.button("⚡ Test Cycle Next Stage").clicked() {
+                        self.cycle_dpi_stage();
+                    }
+                });
+
+                ui.add_space(6.0);
+                ui.label(
+                    egui::RichText::new("Mouse buttons configured for 'DPI Cycle' or 'DPI Up/Down' will sequentially cycle through these configured stages.")
+                        .small()
+                        .color(theme::MUTED),
+                );
+                ui.add_space(12.0);
+                ui.separator();
+                ui.add_space(12.0);
+
+                let mut stage_to_activate = None;
+                let mut stage_to_remove = None;
+                let mut stage_edit = None;
+
+                for (idx, &stage_dpi) in dpi_stages.iter().enumerate() {
+                    let is_active = current_idx == idx;
+
+                    egui::Frame::none()
+                        .fill(if is_active {
+                            Color32::from_rgba_premultiplied(0, 255, 100, 16)
+                        } else {
+                            Color32::from_gray(24)
+                        })
+                        .stroke(egui::Stroke::new(
+                            if is_active { 1.5_f32 } else { 1.0_f32 },
+                            if is_active { theme::ACCENT } else { Color32::from_gray(45) },
+                        ))
+                        .rounding(8.0)
+                        .inner_margin(egui::Margin::symmetric(14.0, 10.0))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                // Stage Number & Status
+                                if is_active {
+                                    ui.label(
+                                        egui::RichText::new(format!("STAGE {}", idx + 1))
+                                            .strong()
+                                            .color(theme::ACCENT),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new("★ ACTIVE")
+                                            .small()
+                                            .strong()
+                                            .color(theme::ACCENT),
+                                    );
+                                } else {
+                                    ui.label(
+                                        egui::RichText::new(format!("STAGE {}", idx + 1))
+                                            .strong()
+                                            .color(Color32::from_gray(180)),
+                                    );
+                                    if ui.button("Activate").clicked() {
+                                        stage_to_activate = Some(idx);
+                                    }
+                                }
+
+                                ui.add_space(12.0);
+
+                                // Slider / DragValue for this stage's DPI
+                                let mut val = stage_dpi;
+                                let drag_res = ui.add(
+                                    egui::DragValue::new(&mut val)
+                                        .range(dpi.min..=dpi.max)
+                                        .speed(50.0)
+                                        .suffix(" DPI"),
+                                );
+                                if drag_res.changed() {
+                                    stage_edit = Some((idx, val));
+                                }
+
+                                ui.add_space(8.0);
+                                let slider_res = ui.add(
+                                    egui::Slider::new(&mut val, dpi.min..=dpi.max)
+                                        .step_by(50.0)
+                                        .show_value(false),
+                                );
+                                if slider_res.changed() {
+                                    stage_edit = Some((idx, val));
+                                }
+
+                                // Step buttons: -100, +100
+                                if ui.small_button("-100").clicked() {
+                                    let new_val = (stage_dpi.saturating_sub(100)).max(dpi.min);
+                                    stage_edit = Some((idx, new_val));
+                                }
+                                if ui.small_button("+100").clicked() {
+                                    let new_val = (stage_dpi.saturating_add(100)).min(dpi.max);
+                                    stage_edit = Some((idx, new_val));
+                                }
+
+                                // Delete Stage Button (if > 1 stage)
+                                if dpi_stages.len() > 1 {
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                        if ui.button(egui::RichText::new("✕").color(Color32::from_gray(140))).clicked() {
+                                            stage_to_remove = Some(idx);
+                                        }
+                                    });
+                                }
+                            });
+                        });
+                    ui.add_space(8.0);
+                }
+
+                // Apply pending actions
+                if let Some(idx) = stage_to_activate {
+                    self.set_dpi_stage(idx);
+                }
+                if let Some((idx, new_val)) = stage_edit {
+                    self.set_dpi_stage_value(idx, new_val);
+                }
+                if let Some(idx) = stage_to_remove {
+                    self.remove_dpi_stage(idx);
+                }
+
+                ui.add_space(8.0);
+
+                // Stage Management Action Buttons
+                ui.horizontal(|ui| {
+                    if dpi_stages.len() < 5 {
+                        if ui.button("➕ Add Stage").clicked() {
+                            self.add_dpi_stage(dpi.min, dpi.max);
+                        }
+                    }
+                    if ui.button("⇅ Sort Low to High").clicked() {
+                        self.sort_dpi_stages();
+                    }
+                    if ui.button("↺ Reset Defaults (400 - 6400)").clicked() {
+                        self.reset_dpi_stages_to_default();
+                    }
+                });
+            });
+
+            ui.add_space(14.0);
+
+            // Direct Sensitivity Override Card
+            widgets::card(ui, "Direct Sensitivity Override", |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Custom DPI:");
                     ui.add(
                         egui::DragValue::new(&mut self.custom_dpi_input)
-                            .range(dpi.min..=dpi.max)
-                            .speed(50.0),
+                            .range(dpi.min as u32..=dpi.max as u32)
+                            .speed(50.0)
+                            .suffix(" DPI"),
                     );
-                    if ui.button("Apply DPI").clicked() {
+                    if ui.button("Set DPI Immediately").clicked() {
                         self.apply_dpi_value(self.custom_dpi_input as u16);
                     }
                     ui.add_space(10.0);
                     ui.label(
-                        egui::RichText::new(format!("Active: {} DPI", self.dpi_x))
+                        egui::RichText::new(format!("Current: {} DPI", self.dpi_x))
                             .strong()
                             .color(theme::ACCENT),
                     );
                 });
 
-                ui.add_space(12.0);
+                ui.add_space(10.0);
                 ui.label(egui::RichText::new("Quick Presets").small().color(theme::MUTED));
                 ui.horizontal_wrapped(|ui| {
-                    for preset in [400, 800, 1600, 3200, 6400, 12000] {
+                    for preset in [400, 800, 1200, 1600, 2400, 3200, 6400, 12000, 16000, 20000] {
                         if preset >= dpi.min && preset <= dpi.max {
                             let is_curr = self.dpi_x == preset as u16;
                             if ui.selectable_label(is_curr, preset.to_string()).clicked() {
@@ -1434,39 +1761,6 @@ impl GuiApp {
                         }
                     }
                 });
-
-                ui.add_space(14.0);
-                ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("DPI Stages (Cycle)").small().color(theme::MUTED));
-                    ui.add_space(10.0);
-                    if ui.button("⚡ Cycle Next Stage").clicked() {
-                        self.cycle_dpi_stage();
-                    }
-                });
-                ui.add_space(4.0);
-
-                if let Some(pid) = self.active_pid {
-                    let (dpi_stages, current_idx) = {
-                        let dev_entry = self.config.devices.entry(pid).or_default();
-                        let prof = dev_entry.ensure_profiles().active_profile();
-                        (prof.dpi_stages.clone(), prof.current_stage_idx)
-                    };
-
-                    let mut target_stage = None;
-                    ui.horizontal(|ui| {
-                        for (idx, stage_dpi) in dpi_stages.iter().enumerate() {
-                            let is_curr_stage = current_idx == idx;
-                            let btn_text = format!("Stage {}: {}", idx + 1, stage_dpi);
-                            if ui.selectable_label(is_curr_stage, btn_text).clicked() {
-                                target_stage = Some(idx);
-                            }
-                        }
-                    });
-
-                    if let Some(idx) = target_stage {
-                        self.set_dpi_stage(idx);
-                    }
-                }
             });
         }
 

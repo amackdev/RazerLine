@@ -175,12 +175,14 @@ pub enum SensitivityAction {
 }
 
 impl SensitivityAction {
-    pub fn label(&self) -> &'static str {
+    pub fn label(&self) -> String {
         match self {
-            SensitivityAction::CycleDpi => "DPI Cycle",
-            SensitivityAction::DpiUp => "DPI Stage Up",
-            SensitivityAction::DpiDown => "DPI Stage Down",
-            SensitivityAction::SniperClutch { clutch_dpi: _ } => "Sniper Clutch (400 DPI)",
+            SensitivityAction::CycleDpi => "DPI Cycle".to_string(),
+            SensitivityAction::DpiUp => "DPI Stage Up".to_string(),
+            SensitivityAction::DpiDown => "DPI Stage Down".to_string(),
+            SensitivityAction::SniperClutch { clutch_dpi } => {
+                format!("Sniper Clutch ({clutch_dpi} DPI)")
+            }
         }
     }
 }
