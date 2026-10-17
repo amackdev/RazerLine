@@ -600,26 +600,18 @@ impl GuiApp {
                 // 100-45000) is too coarse to land on an exact value —
                 // type the number directly instead, with presets for the
                 // common steps.
-                let mut x = self.dpi_x as u32;
-                let mut y = self.dpi_y as u32;
+                let mut val = self.dpi_x as u32;
 
                 ui.horizontal(|ui| {
-                    ui.label("X:");
+                    ui.label("DPI:");
                     ui.add(
-                        egui::DragValue::new(&mut x)
-                            .range(dpi.min..=dpi.max)
-                            .speed(50.0),
-                    );
-                    ui.add_space(10.0);
-                    ui.label("Y:");
-                    ui.add(
-                        egui::DragValue::new(&mut y)
+                        egui::DragValue::new(&mut val)
                             .range(dpi.min..=dpi.max)
                             .speed(50.0),
                     );
                 });
-                self.dpi_x = x as u16;
-                self.dpi_y = y as u16;
+                self.dpi_x = val as u16;
+                self.dpi_y = val as u16;
 
                 ui.add_space(6.0);
                 ui.horizontal_wrapped(|ui| {
