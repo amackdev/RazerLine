@@ -59,6 +59,7 @@ pub struct DpiRuntimeState {
 }
 
 impl DpiRuntimeState {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             device: Arc::new(Mutex::new(None)),
@@ -68,6 +69,35 @@ impl DpiRuntimeState {
             current_stage_idx: Arc::new(AtomicUsize::new(2)),
             original_clutch_dpi: Arc::new(Mutex::new(None)),
             active_profile_id: Arc::new(RwLock::new(None)),
+        }
+    }
+
+    pub fn from_config(config: &AppConfig) -> Self {
+        let mut initial_dpi = 1600;
+        let mut initial_stages = vec![400, 800, 1600, 3200, 6400];
+        let mut initial_stage_idx = 2;
+        let mut initial_profile_id = None;
+        let mut initial_pid = 0;
+
+        if let Some((&pid, dev_entry)) = config.devices.iter().next() {
+            initial_pid = pid as u32;
+            if let Some(prof_cfg) = dev_entry.profile_data.as_ref() {
+                let prof = prof_cfg.active_profile();
+                initial_dpi = prof.dpi;
+                initial_stages = prof.dpi_stages.clone();
+                initial_stage_idx = prof.current_stage_idx;
+                initial_profile_id = Some(prof.id.clone());
+            }
+        }
+
+        Self {
+            device: Arc::new(Mutex::new(None)),
+            active_pid: Arc::new(AtomicU32::new(initial_pid)),
+            current_dpi: Arc::new(AtomicU16::new(initial_dpi)),
+            dpi_stages: Arc::new(RwLock::new(initial_stages)),
+            current_stage_idx: Arc::new(AtomicUsize::new(initial_stage_idx)),
+            original_clutch_dpi: Arc::new(Mutex::new(None)),
+            active_profile_id: Arc::new(RwLock::new(initial_profile_id)),
         }
     }
 }
@@ -80,20 +110,20 @@ fn spawn_background_worker(state: DpiRuntimeState, rx: Receiver<HookCommand>) {
         .name("razerline-bg-worker".into())
         .spawn(move || {
             loop {
-                // Wait up to 150ms for an input hook command. When timeout fires, poll hardware DPI.
-                match rx.recv_timeout(Duration::from_millis(150)) {
+                // Wait up to 60ms for fast, imperceptible latency when physical buttons are clicked
+                match rx.recv_timeout(Duration::from_millis(60)) {
                     Ok(cmd) => match cmd {
                         HookCommand::CycleDpi => {
                             let stages = state.dpi_stages.read().unwrap().clone();
                             if !stages.is_empty() {
-                                let cur = state.current_stage_idx.load(Ordering::SeqCst);
+                                let cur = state.current_stage_idx.load(Ordering::SeqCst) % stages.len();
                                 let next = (cur + 1) % stages.len();
-                                state.current_stage_idx.store(next, Ordering::SeqCst);
                                 let target_dpi = stages[next];
-                                state.current_dpi.store(target_dpi, Ordering::SeqCst);
                                 if let Some(dev) = state.device.lock().unwrap().as_ref() {
                                     let _ = dev.set_dpi(target_dpi, target_dpi);
                                 }
+                                state.current_stage_idx.store(next, Ordering::SeqCst);
+                                state.current_dpi.store(target_dpi, Ordering::SeqCst);
                                 crate::osd::show_dpi(target_dpi);
 
                                 let pid = state.active_pid.load(Ordering::SeqCst) as u16;
@@ -112,12 +142,12 @@ fn spawn_background_worker(state: DpiRuntimeState, rx: Receiver<HookCommand>) {
                             if !stages.is_empty() {
                                 let cur = state.current_stage_idx.load(Ordering::SeqCst);
                                 let next = (cur + 1).min(stages.len().saturating_sub(1));
-                                state.current_stage_idx.store(next, Ordering::SeqCst);
                                 let target_dpi = stages[next];
-                                state.current_dpi.store(target_dpi, Ordering::SeqCst);
                                 if let Some(dev) = state.device.lock().unwrap().as_ref() {
                                     let _ = dev.set_dpi(target_dpi, target_dpi);
                                 }
+                                state.current_stage_idx.store(next, Ordering::SeqCst);
+                                state.current_dpi.store(target_dpi, Ordering::SeqCst);
                                 crate::osd::show_dpi(target_dpi);
 
                                 let pid = state.active_pid.load(Ordering::SeqCst) as u16;
@@ -136,12 +166,12 @@ fn spawn_background_worker(state: DpiRuntimeState, rx: Receiver<HookCommand>) {
                             if !stages.is_empty() {
                                 let cur = state.current_stage_idx.load(Ordering::SeqCst);
                                 let next = cur.saturating_sub(1);
-                                state.current_stage_idx.store(next, Ordering::SeqCst);
                                 let target_dpi = stages[next];
-                                state.current_dpi.store(target_dpi, Ordering::SeqCst);
                                 if let Some(dev) = state.device.lock().unwrap().as_ref() {
                                     let _ = dev.set_dpi(target_dpi, target_dpi);
                                 }
+                                state.current_stage_idx.store(next, Ordering::SeqCst);
+                                state.current_dpi.store(target_dpi, Ordering::SeqCst);
                                 crate::osd::show_dpi(target_dpi);
 
                                 let pid = state.active_pid.load(Ordering::SeqCst) as u16;
@@ -221,23 +251,30 @@ fn spawn_background_worker(state: DpiRuntimeState, rx: Receiver<HookCommand>) {
                             if let Ok(hw_dpi) = dev.get_dpi() {
                                 let cur = state.current_dpi.load(Ordering::SeqCst);
                                 if hw_dpi.x > 0 && hw_dpi.x != cur {
-                                    state.current_dpi.store(hw_dpi.x, Ordering::SeqCst);
                                     let stages = state.dpi_stages.read().unwrap().clone();
-                                    if let Some(pos) = stages.iter().position(|&s| s == hw_dpi.x) {
-                                        state.current_stage_idx.store(pos, Ordering::SeqCst);
-                                    }
-                                    crate::osd::show_dpi(hw_dpi.x);
+                                    if !stages.is_empty() {
+                                        let cur_idx = state.current_stage_idx.load(Ordering::SeqCst) % stages.len();
+                                        let next_idx = (cur_idx + 1) % stages.len();
+                                        let target_dpi = stages[next_idx];
 
-                                    let pid = state.active_pid.load(Ordering::SeqCst) as u16;
-                                    if pid > 0 {
-                                        let mut cfg = AppConfig::load();
-                                        let dev_entry = cfg.devices.entry(pid).or_default();
-                                        let prof = dev_entry.ensure_profiles().active_profile_mut();
-                                        prof.dpi = hw_dpi.x;
-                                        if let Some(pos) = prof.dpi_stages.iter().position(|&s| s == hw_dpi.x) {
-                                            prof.current_stage_idx = pos;
+                                        // Immediately enforce the user's configured DPI stage on the hardware sensor
+                                        let _ = dev.set_dpi(target_dpi, target_dpi);
+                                        state.current_dpi.store(target_dpi, Ordering::SeqCst);
+                                        state.current_stage_idx.store(next_idx, Ordering::SeqCst);
+                                        crate::osd::show_dpi(target_dpi);
+
+                                        let pid = state.active_pid.load(Ordering::SeqCst) as u16;
+                                        if pid > 0 {
+                                            let mut cfg = AppConfig::load();
+                                            let dev_entry = cfg.devices.entry(pid).or_default();
+                                            let prof = dev_entry.ensure_profiles().active_profile_mut();
+                                            prof.current_stage_idx = next_idx;
+                                            prof.dpi = target_dpi;
+                                            let _ = cfg.save();
                                         }
-                                        let _ = cfg.save();
+                                    } else {
+                                        state.current_dpi.store(hw_dpi.x, Ordering::SeqCst);
+                                        crate::osd::show_dpi(hw_dpi.x);
                                     }
                                 }
                             }
@@ -305,7 +342,7 @@ impl GuiApp {
         let config = AppConfig::load();
         let tray = TrayManager::new().ok();
         let mut input_hook = InputHookManager::new();
-        let runtime_state = DpiRuntimeState::new();
+        let runtime_state = DpiRuntimeState::from_config(&config);
 
         if let Some(rx) = input_hook.take_command_rx() {
             spawn_background_worker(runtime_state.clone(), rx);
@@ -343,6 +380,7 @@ impl GuiApp {
             let dev_entry = app.config.devices.entry(pid).or_default();
             let prof = dev_entry.ensure_profiles().active_profile();
             app.input_hook.update_mappings(prof.button_mappings.clone());
+            crate::input_hook::update_active_mappings(prof.button_mappings.clone());
         }
         app
     }
@@ -392,29 +430,21 @@ impl GuiApp {
                 self.info_text = None;
                 self.selected_zone_idx = 0;
 
-                // Read current hardware DPI on connection
-                let mut initial_dpi = 1600;
-                if let Ok(hw_dpi) = dev.get_dpi() {
-                    if hw_dpi.x > 0 {
-                        self.dpi_x = hw_dpi.x;
-                        self.dpi_y = hw_dpi.y;
-                        self.custom_dpi_input = hw_dpi.x as u32;
-                        initial_dpi = hw_dpi.x;
-                    }
-                }
-
-                *self.runtime_state.device.lock().unwrap() = Some(dev);
-                self.runtime_state.active_pid.store(pid as u32, Ordering::SeqCst);
-                self.runtime_state.current_dpi.store(initial_dpi, Ordering::SeqCst);
-
                 // Ensure device profile collection exists
                 let dev_entry = self.config.devices.entry(pid).or_default();
                 let prof_cfg = dev_entry.ensure_profiles();
                 let active_prof = prof_cfg.active_profile().clone();
 
+                *self.runtime_state.device.lock().unwrap() = Some(dev);
+                self.runtime_state.active_pid.store(pid as u32, Ordering::SeqCst);
+                self.runtime_state.current_dpi.store(active_prof.dpi, Ordering::SeqCst);
                 *self.runtime_state.dpi_stages.write().unwrap() = active_prof.dpi_stages.clone();
                 self.runtime_state.current_stage_idx.store(active_prof.current_stage_idx, Ordering::SeqCst);
                 *self.runtime_state.active_profile_id.write().unwrap() = Some(active_prof.id.clone());
+
+                // Update input hook mappings with active profile mappings
+                self.input_hook.update_mappings(active_prof.button_mappings.clone());
+                crate::input_hook::update_active_mappings(active_prof.button_mappings.clone());
 
                 // Apply active profile
                 self.apply_user_profile(&active_prof, profile);
