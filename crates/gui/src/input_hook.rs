@@ -127,7 +127,14 @@ mod win32 {
 }
 
 pub struct InputHookManager {
-    command_rx: Receiver<HookCommand>,
+    command_rx: Option<Receiver<HookCommand>>,
+}
+
+/// Updates the active profile's button remapping table directly from anywhere.
+pub fn update_active_mappings(mappings: HashMap<MouseButtonId, ButtonAction>) {
+    if let Ok(mut lock) = CURRENT_MAPPINGS.write() {
+        *lock = Some(mappings);
+    }
 }
 
 impl InputHookManager {
@@ -172,19 +179,23 @@ impl InputHookManager {
                 .expect("failed to spawn mouse hook thread");
         }
 
-        Self { command_rx: rx }
+        Self { command_rx: Some(rx) }
+    }
+
+    /// Takes ownership of the hook command receiver for background processing.
+    pub fn take_command_rx(&mut self) -> Option<Receiver<HookCommand>> {
+        self.command_rx.take()
     }
 
     /// Updates the active profile's button remapping table in the hook engine.
     pub fn update_mappings(&self, mappings: HashMap<MouseButtonId, ButtonAction>) {
-        if let Ok(mut lock) = CURRENT_MAPPINGS.write() {
-            *lock = Some(mappings);
-        }
+        update_active_mappings(mappings);
     }
 
     /// Polls for hardware commands triggered by remapped buttons (e.g. DPI Cycle, Sniper Clutch).
+    #[allow(dead_code)]
     pub fn try_recv_command(&self) -> Option<HookCommand> {
-        self.command_rx.try_recv().ok()
+        self.command_rx.as_ref().and_then(|rx| rx.try_recv().ok())
     }
 }
 

@@ -1,4 +1,7 @@
-use std::thread::sleep;
+use std::sync::atomic::{AtomicU16, AtomicU32, AtomicUsize, Ordering};
+use std::sync::mpsc::{self, Receiver};
+use std::sync::{Arc, Mutex, RwLock};
+use std::thread::{self, sleep};
 use std::time::{Duration, Instant};
 
 /// Delay between consecutive zone writes when "All zones" fires more than
@@ -44,6 +47,209 @@ use crate::widgets::{self, PreviewKind};
 const SCAN_INTERVAL: Duration = Duration::from_millis(1000);
 const DPI_POLL_INTERVAL: Duration = Duration::from_millis(400);
 
+#[derive(Clone)]
+pub struct DpiRuntimeState {
+    pub device: Arc<Mutex<Option<RazerDevice>>>,
+    pub active_pid: Arc<AtomicU32>,
+    pub current_dpi: Arc<AtomicU16>,
+    pub dpi_stages: Arc<RwLock<Vec<u16>>>,
+    pub current_stage_idx: Arc<AtomicUsize>,
+    pub original_clutch_dpi: Arc<Mutex<Option<u16>>>,
+    pub active_profile_id: Arc<RwLock<Option<String>>>,
+}
+
+impl DpiRuntimeState {
+    pub fn new() -> Self {
+        Self {
+            device: Arc::new(Mutex::new(None)),
+            active_pid: Arc::new(AtomicU32::new(0)),
+            current_dpi: Arc::new(AtomicU16::new(1600)),
+            dpi_stages: Arc::new(RwLock::new(vec![400, 800, 1600, 3200, 6400])),
+            current_stage_idx: Arc::new(AtomicUsize::new(2)),
+            original_clutch_dpi: Arc::new(Mutex::new(None)),
+            active_profile_id: Arc::new(RwLock::new(None)),
+        }
+    }
+}
+
+/// Dedicated background worker thread that processes mouse button remapping commands
+/// (DPI cycle, DPI up/down, sniper clutch, profile cycle) and continuously polls hardware
+/// DPI even when the GUI window is hidden, minimized to the system tray, or while playing full-screen games.
+fn spawn_background_worker(state: DpiRuntimeState, rx: Receiver<HookCommand>) {
+    thread::Builder::new()
+        .name("razerline-bg-worker".into())
+        .spawn(move || {
+            loop {
+                // Wait up to 150ms for an input hook command. When timeout fires, poll hardware DPI.
+                match rx.recv_timeout(Duration::from_millis(150)) {
+                    Ok(cmd) => match cmd {
+                        HookCommand::CycleDpi => {
+                            let stages = state.dpi_stages.read().unwrap().clone();
+                            if !stages.is_empty() {
+                                let cur = state.current_stage_idx.load(Ordering::SeqCst);
+                                let next = (cur + 1) % stages.len();
+                                state.current_stage_idx.store(next, Ordering::SeqCst);
+                                let target_dpi = stages[next];
+                                state.current_dpi.store(target_dpi, Ordering::SeqCst);
+                                if let Some(dev) = state.device.lock().unwrap().as_ref() {
+                                    let _ = dev.set_dpi(target_dpi, target_dpi);
+                                }
+                                crate::osd::show_dpi(target_dpi);
+
+                                let pid = state.active_pid.load(Ordering::SeqCst) as u16;
+                                if pid > 0 {
+                                    let mut cfg = AppConfig::load();
+                                    let dev_entry = cfg.devices.entry(pid).or_default();
+                                    let prof = dev_entry.ensure_profiles().active_profile_mut();
+                                    prof.current_stage_idx = next;
+                                    prof.dpi = target_dpi;
+                                    let _ = cfg.save();
+                                }
+                            }
+                        }
+                        HookCommand::DpiUp => {
+                            let stages = state.dpi_stages.read().unwrap().clone();
+                            if !stages.is_empty() {
+                                let cur = state.current_stage_idx.load(Ordering::SeqCst);
+                                let next = (cur + 1).min(stages.len().saturating_sub(1));
+                                state.current_stage_idx.store(next, Ordering::SeqCst);
+                                let target_dpi = stages[next];
+                                state.current_dpi.store(target_dpi, Ordering::SeqCst);
+                                if let Some(dev) = state.device.lock().unwrap().as_ref() {
+                                    let _ = dev.set_dpi(target_dpi, target_dpi);
+                                }
+                                crate::osd::show_dpi(target_dpi);
+
+                                let pid = state.active_pid.load(Ordering::SeqCst) as u16;
+                                if pid > 0 {
+                                    let mut cfg = AppConfig::load();
+                                    let dev_entry = cfg.devices.entry(pid).or_default();
+                                    let prof = dev_entry.ensure_profiles().active_profile_mut();
+                                    prof.current_stage_idx = next;
+                                    prof.dpi = target_dpi;
+                                    let _ = cfg.save();
+                                }
+                            }
+                        }
+                        HookCommand::DpiDown => {
+                            let stages = state.dpi_stages.read().unwrap().clone();
+                            if !stages.is_empty() {
+                                let cur = state.current_stage_idx.load(Ordering::SeqCst);
+                                let next = cur.saturating_sub(1);
+                                state.current_stage_idx.store(next, Ordering::SeqCst);
+                                let target_dpi = stages[next];
+                                state.current_dpi.store(target_dpi, Ordering::SeqCst);
+                                if let Some(dev) = state.device.lock().unwrap().as_ref() {
+                                    let _ = dev.set_dpi(target_dpi, target_dpi);
+                                }
+                                crate::osd::show_dpi(target_dpi);
+
+                                let pid = state.active_pid.load(Ordering::SeqCst) as u16;
+                                if pid > 0 {
+                                    let mut cfg = AppConfig::load();
+                                    let dev_entry = cfg.devices.entry(pid).or_default();
+                                    let prof = dev_entry.ensure_profiles().active_profile_mut();
+                                    prof.current_stage_idx = next;
+                                    prof.dpi = target_dpi;
+                                    let _ = cfg.save();
+                                }
+                            }
+                        }
+                        HookCommand::SetClutchDpi(clutch_dpi) => {
+                            {
+                                let mut orig = state.original_clutch_dpi.lock().unwrap();
+                                if orig.is_none() {
+                                    *orig = Some(state.current_dpi.load(Ordering::SeqCst));
+                                }
+                            }
+                            if let Some(dev) = state.device.lock().unwrap().as_ref() {
+                                let _ = dev.set_dpi(clutch_dpi, clutch_dpi);
+                            }
+                            crate::osd::show_dpi(clutch_dpi);
+                        }
+                        HookCommand::RestoreClutchDpi => {
+                            let orig = state.original_clutch_dpi.lock().unwrap().take();
+                            if let Some(orig_dpi) = orig {
+                                if let Some(dev) = state.device.lock().unwrap().as_ref() {
+                                    let _ = dev.set_dpi(orig_dpi, orig_dpi);
+                                }
+                                crate::osd::show_dpi(orig_dpi);
+                            }
+                        }
+                        HookCommand::CycleProfile => {
+                            let pid = state.active_pid.load(Ordering::SeqCst) as u16;
+                            if pid > 0 {
+                                let mut cfg = AppConfig::load();
+                                let dev_entry = cfg.devices.entry(pid).or_default();
+                                let prof_cfg = dev_entry.ensure_profiles();
+                                if !prof_cfg.profiles.is_empty() {
+                                    let cur_pos = prof_cfg
+                                        .profiles
+                                        .iter()
+                                        .position(|p| p.id == prof_cfg.active_profile_id)
+                                        .unwrap_or(0);
+                                    let next_pos = (cur_pos + 1) % prof_cfg.profiles.len();
+                                    let next_id = prof_cfg.profiles[next_pos].id.clone();
+                                    prof_cfg.active_profile_id = next_id.clone();
+                                    let user_prof = prof_cfg.active_profile().clone();
+
+                                    *state.active_profile_id.write().unwrap() = Some(next_id);
+                                    *state.dpi_stages.write().unwrap() = user_prof.dpi_stages.clone();
+                                    state.current_stage_idx.store(user_prof.current_stage_idx, Ordering::SeqCst);
+                                    state.current_dpi.store(user_prof.dpi, Ordering::SeqCst);
+
+                                    if let Some(dev) = state.device.lock().unwrap().as_ref() {
+                                        let _ = dev.set_dpi(user_prof.dpi, user_prof.dpi);
+                                        if let Some(hz) = user_prof.poll_rate_hz {
+                                            let _ = dev.set_poll_rate(hz);
+                                        }
+                                        for zone in dev.profile.leds {
+                                            let _ = dev.set_led_brightness(zone, user_prof.brightness);
+                                        }
+                                    }
+
+                                    crate::input_hook::update_active_mappings(user_prof.button_mappings.clone());
+                                    crate::osd::show_dpi(user_prof.dpi);
+                                    let _ = cfg.save();
+                                }
+                            }
+                        }
+                    },
+                    Err(mpsc::RecvTimeoutError::Timeout) => {
+                        // Periodic hardware DPI polling (e.g. user pressed physical mouse DPI button)
+                        if let Some(dev) = state.device.lock().unwrap().as_ref() {
+                            if let Ok(hw_dpi) = dev.get_dpi() {
+                                let cur = state.current_dpi.load(Ordering::SeqCst);
+                                if hw_dpi.x > 0 && hw_dpi.x != cur {
+                                    state.current_dpi.store(hw_dpi.x, Ordering::SeqCst);
+                                    let stages = state.dpi_stages.read().unwrap().clone();
+                                    if let Some(pos) = stages.iter().position(|&s| s == hw_dpi.x) {
+                                        state.current_stage_idx.store(pos, Ordering::SeqCst);
+                                    }
+                                    crate::osd::show_dpi(hw_dpi.x);
+
+                                    let pid = state.active_pid.load(Ordering::SeqCst) as u16;
+                                    if pid > 0 {
+                                        let mut cfg = AppConfig::load();
+                                        let dev_entry = cfg.devices.entry(pid).or_default();
+                                        let prof = dev_entry.ensure_profiles().active_profile_mut();
+                                        prof.dpi = hw_dpi.x;
+                                        if let Some(pos) = prof.dpi_stages.iter().position(|&s| s == hw_dpi.x) {
+                                            prof.current_stage_idx = pos;
+                                        }
+                                        let _ = cfg.save();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                }
+            }
+        })
+        .expect("failed to spawn background worker thread");
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActiveTab {
     Customize,
@@ -54,11 +260,10 @@ pub enum ActiveTab {
 }
 
 pub struct GuiApp {
-    device: Option<RazerDevice>,
+    runtime_state: DpiRuntimeState,
     connected: Vec<&'static DeviceProfile>,
     active_pid: Option<u16>,
     last_scan: Instant,
-    last_dpi_poll: Instant,
     status: String,
     status_is_error: bool,
 
@@ -69,7 +274,6 @@ pub struct GuiApp {
     mouse_3d: Mouse3dView,
     selected_button: Option<MouseButtonId>,
     input_hook: InputHookManager,
-    original_clutch_dpi: Option<u16>,
 
     // Performance
     dpi_x: u16,
@@ -100,20 +304,24 @@ impl GuiApp {
     pub fn new() -> Self {
         let config = AppConfig::load();
         let tray = TrayManager::new().ok();
-        let input_hook = InputHookManager::new();
+        let mut input_hook = InputHookManager::new();
+        let runtime_state = DpiRuntimeState::new();
+
+        if let Some(rx) = input_hook.take_command_rx() {
+            spawn_background_worker(runtime_state.clone(), rx);
+        }
+
         let mut app = Self {
-            device: None,
+            runtime_state,
             connected: Vec::new(),
             active_pid: None,
             last_scan: Instant::now(),
-            last_dpi_poll: Instant::now(),
             status: "Scanning for devices...".to_string(),
             status_is_error: false,
             active_tab: ActiveTab::Customize,
             mouse_3d: Mouse3dView::default(),
             selected_button: Some(MouseButtonId::MiddleClick),
             input_hook,
-            original_clutch_dpi: None,
             dpi_x: 1600,
             dpi_y: 1600,
             custom_dpi_input: 1600,
@@ -139,6 +347,14 @@ impl GuiApp {
         app
     }
 
+    pub fn active_device_profile(&self) -> Option<&'static DeviceProfile> {
+        self.runtime_state.device.lock().unwrap().as_ref().map(|d| d.profile)
+    }
+
+    pub fn has_device(&self) -> bool {
+        self.runtime_state.device.lock().unwrap().is_some()
+    }
+
     /// Re-enumerates connected devices and reconciles state against what
     /// was already open.
     fn rescan(&mut self) {
@@ -157,7 +373,8 @@ impl GuiApp {
         self.connected = found;
 
         if !active_still_present {
-            self.device = None;
+            *self.runtime_state.device.lock().unwrap() = None;
+            self.runtime_state.active_pid.store(0, Ordering::SeqCst);
             self.active_pid = None;
             match self.connected.first().copied() {
                 Some(profile) => self.open(profile),
@@ -176,26 +393,35 @@ impl GuiApp {
                 self.selected_zone_idx = 0;
 
                 // Read current hardware DPI on connection
+                let mut initial_dpi = 1600;
                 if let Ok(hw_dpi) = dev.get_dpi() {
                     if hw_dpi.x > 0 {
                         self.dpi_x = hw_dpi.x;
                         self.dpi_y = hw_dpi.y;
                         self.custom_dpi_input = hw_dpi.x as u32;
+                        initial_dpi = hw_dpi.x;
                     }
                 }
 
-                self.device = Some(dev);
+                *self.runtime_state.device.lock().unwrap() = Some(dev);
+                self.runtime_state.active_pid.store(pid as u32, Ordering::SeqCst);
+                self.runtime_state.current_dpi.store(initial_dpi, Ordering::SeqCst);
 
                 // Ensure device profile collection exists
                 let dev_entry = self.config.devices.entry(pid).or_default();
                 let prof_cfg = dev_entry.ensure_profiles();
                 let active_prof = prof_cfg.active_profile().clone();
 
+                *self.runtime_state.dpi_stages.write().unwrap() = active_prof.dpi_stages.clone();
+                self.runtime_state.current_stage_idx.store(active_prof.current_stage_idx, Ordering::SeqCst);
+                *self.runtime_state.active_profile_id.write().unwrap() = Some(active_prof.id.clone());
+
                 // Apply active profile
                 self.apply_user_profile(&active_prof, profile);
             }
             Err(e) => {
-                self.device = None;
+                *self.runtime_state.device.lock().unwrap() = None;
+                self.runtime_state.active_pid.store(0, Ordering::SeqCst);
                 self.active_pid = None;
                 self.set_status(format!("Couldn't open {}: {e}", profile.name), true);
             }
@@ -214,103 +440,112 @@ impl GuiApp {
         self.dpi_x = user_prof.dpi;
         self.dpi_y = user_prof.dpi;
         self.custom_dpi_input = user_prof.dpi as u32;
-        if let Some(dev) = &self.device {
-            if profile.dpi.is_some() && dev.set_dpi(self.dpi_x, self.dpi_y).is_ok() {
-                applied.push("DPI");
+
+        self.runtime_state.current_dpi.store(user_prof.dpi, Ordering::SeqCst);
+        *self.runtime_state.dpi_stages.write().unwrap() = user_prof.dpi_stages.clone();
+        self.runtime_state.current_stage_idx.store(user_prof.current_stage_idx, Ordering::SeqCst);
+
+        let mut set_poll = None;
+        {
+            let dev_guard = self.runtime_state.device.lock().unwrap();
+            if let Some(dev) = dev_guard.as_ref() {
+                if profile.dpi.is_some() && dev.set_dpi(self.dpi_x, self.dpi_y).is_ok() {
+                    applied.push("DPI");
+                }
+
+                // 2. Polling rate
+                if let Some(hz) = user_prof.poll_rate_hz {
+                    if profile.poll_rate.is_some() && dev.set_poll_rate(hz).is_ok() {
+                        set_poll = Some(hz);
+                        applied.push("Polling rate");
+                    }
+                }
+
+                // 3. Brightness & Color
+                self.brightness = user_prof.brightness;
+                self.led_color = user_prof.led_color;
+                self.sync_zones = user_prof.sync_zones;
+                self.current_effect_name = Some(user_prof.effect.clone());
+
+                for zone in profile.leds {
+                    let _ = dev.set_led_brightness(zone, user_prof.brightness);
+                }
+
+                // Apply effect
+                match user_prof.effect.as_str() {
+                    "static" => {
+                        self.last_preview = PreviewKind::Static;
+                        for (i, zone) in profile.leds.iter().enumerate() {
+                            if i > 0 {
+                                sleep(INTER_ZONE_DELAY);
+                            }
+                            let _ = dev.set_led_static(zone, user_prof.led_color);
+                        }
+                        if profile.matrix.is_some() {
+                            sleep(INTER_ZONE_DELAY);
+                            let _ = dev.fill_matrix(user_prof.led_color);
+                        }
+                        applied.push("Lighting");
+                    }
+                    "spectrum" => {
+                        self.last_preview = PreviewKind::Spectrum;
+                        for (i, zone) in profile.leds.iter().enumerate() {
+                            if i > 0 {
+                                sleep(INTER_ZONE_DELAY);
+                            }
+                            let _ = dev.set_led_spectrum(zone);
+                        }
+                        if profile.matrix.and_then(|m| m.effect_led_id).is_some() {
+                            sleep(INTER_ZONE_DELAY);
+                            let _ = dev.set_matrix_spectrum();
+                        }
+                        applied.push("Lighting");
+                    }
+                    "breathing" => {
+                        self.last_preview = PreviewKind::Breathing;
+                        for (i, zone) in profile.leds.iter().enumerate() {
+                            if i > 0 {
+                                sleep(INTER_ZONE_DELAY);
+                            }
+                            let _ = dev.set_led_breathing(zone, user_prof.led_color);
+                        }
+                        applied.push("Lighting");
+                    }
+                    "wave" => {
+                        self.last_preview = PreviewKind::Wave;
+                        for (i, zone) in profile.leds.iter().enumerate() {
+                            if i > 0 {
+                                sleep(INTER_ZONE_DELAY);
+                            }
+                            let _ = dev.set_led_wave(zone, 1);
+                        }
+                        if profile.matrix.and_then(|m| m.effect_led_id).is_some() {
+                            sleep(INTER_ZONE_DELAY);
+                            let _ = dev.set_matrix_wave(1);
+                        }
+                        applied.push("Lighting");
+                    }
+                    "off" => {
+                        self.last_preview = PreviewKind::Off;
+                        for (i, zone) in profile.leds.iter().enumerate() {
+                            if i > 0 {
+                                sleep(INTER_ZONE_DELAY);
+                            }
+                            let _ = dev.set_led_off(zone);
+                        }
+                        if profile.matrix.is_some() {
+                            sleep(INTER_ZONE_DELAY);
+                            let _ = dev.fill_matrix([0, 0, 0]);
+                        }
+                        applied.push("Lighting");
+                    }
+                    _ => {}
+                }
             }
         }
 
-        // 2. Polling rate
-        if let Some(hz) = user_prof.poll_rate_hz {
-            if let Some(dev) = &self.device {
-                if profile.poll_rate.is_some() && dev.set_poll_rate(hz).is_ok() {
-                    self.current_poll_hz = Some(hz);
-                    applied.push("Polling rate");
-                }
-            }
-        }
-
-        // 3. Brightness & Color
-        self.brightness = user_prof.brightness;
-        self.led_color = user_prof.led_color;
-        self.sync_zones = user_prof.sync_zones;
-        self.current_effect_name = Some(user_prof.effect.clone());
-
-        if let Some(dev) = &self.device {
-            for zone in profile.leds {
-                let _ = dev.set_led_brightness(zone, user_prof.brightness);
-            }
-
-            // Apply effect
-            match user_prof.effect.as_str() {
-                "static" => {
-                    self.last_preview = PreviewKind::Static;
-                    for (i, zone) in profile.leds.iter().enumerate() {
-                        if i > 0 {
-                            sleep(INTER_ZONE_DELAY);
-                        }
-                        let _ = dev.set_led_static(zone, user_prof.led_color);
-                    }
-                    if profile.matrix.is_some() {
-                        sleep(INTER_ZONE_DELAY);
-                        let _ = dev.fill_matrix(user_prof.led_color);
-                    }
-                    applied.push("Lighting");
-                }
-                "spectrum" => {
-                    self.last_preview = PreviewKind::Spectrum;
-                    for (i, zone) in profile.leds.iter().enumerate() {
-                        if i > 0 {
-                            sleep(INTER_ZONE_DELAY);
-                        }
-                        let _ = dev.set_led_spectrum(zone);
-                    }
-                    if profile.matrix.and_then(|m| m.effect_led_id).is_some() {
-                        sleep(INTER_ZONE_DELAY);
-                        let _ = dev.set_matrix_spectrum();
-                    }
-                    applied.push("Lighting");
-                }
-                "breathing" => {
-                    self.last_preview = PreviewKind::Breathing;
-                    for (i, zone) in profile.leds.iter().enumerate() {
-                        if i > 0 {
-                            sleep(INTER_ZONE_DELAY);
-                        }
-                        let _ = dev.set_led_breathing(zone, user_prof.led_color);
-                    }
-                    applied.push("Lighting");
-                }
-                "wave" => {
-                    self.last_preview = PreviewKind::Wave;
-                    for (i, zone) in profile.leds.iter().enumerate() {
-                        if i > 0 {
-                            sleep(INTER_ZONE_DELAY);
-                        }
-                        let _ = dev.set_led_wave(zone, 1);
-                    }
-                    if profile.matrix.and_then(|m| m.effect_led_id).is_some() {
-                        sleep(INTER_ZONE_DELAY);
-                        let _ = dev.set_matrix_wave(1);
-                    }
-                    applied.push("Lighting");
-                }
-                "off" => {
-                    self.last_preview = PreviewKind::Off;
-                    for (i, zone) in profile.leds.iter().enumerate() {
-                        if i > 0 {
-                            sleep(INTER_ZONE_DELAY);
-                        }
-                        let _ = dev.set_led_off(zone);
-                    }
-                    if profile.matrix.is_some() {
-                        sleep(INTER_ZONE_DELAY);
-                        let _ = dev.fill_matrix([0, 0, 0]);
-                    }
-                    applied.push("Lighting");
-                }
-                _ => {}
-            }
+        if let Some(hz) = set_poll {
+            self.current_poll_hz = Some(hz);
         }
 
         // 4. Button remapping hook table
@@ -336,6 +571,11 @@ impl GuiApp {
             prof_cfg.active_profile_id = profile_id.to_string();
             let user_prof = prof_cfg.active_profile().clone();
 
+            *self.runtime_state.active_profile_id.write().unwrap() = Some(profile_id.to_string());
+            *self.runtime_state.dpi_stages.write().unwrap() = user_prof.dpi_stages.clone();
+            self.runtime_state.current_stage_idx.store(user_prof.current_stage_idx, Ordering::SeqCst);
+            self.runtime_state.current_dpi.store(user_prof.dpi, Ordering::SeqCst);
+
             if let Some(profile) = self
                 .connected
                 .iter()
@@ -356,9 +596,8 @@ impl GuiApp {
     fn save_current_device_config(&mut self) {
         if let Some(pid) = self.active_pid {
             let name = self
-                .device
-                .as_ref()
-                .map(|d| d.profile.name)
+                .active_device_profile()
+                .map(|p| p.name)
                 .unwrap_or("Razer Device");
             let dpi = self.dpi_x;
             let poll = self.current_poll_hz;
@@ -366,11 +605,13 @@ impl GuiApp {
             let color = self.led_color;
             let sync = self.sync_zones;
             let effect = self.current_effect_name.clone();
-            let matrix = self
-                .device
-                .as_ref()
-                .and_then(|d| d.matrix_dims())
-                .map(|_| self.matrix_color);
+            let matrix = {
+                let dev_guard = self.runtime_state.device.lock().unwrap();
+                dev_guard
+                    .as_ref()
+                    .and_then(|d| d.matrix_dims())
+                    .map(|_| self.matrix_color)
+            };
 
             self.config.update_device(
                 pid,
@@ -387,30 +628,35 @@ impl GuiApp {
         }
     }
 
-    /// Actively polls the hardware DPI over USB. Detects when the user presses
-    /// the physical DPI button on the mouse and synchronizes the active GUI profile.
-    fn poll_hardware_dpi(&mut self) {
-        let Some(dev) = &self.device else { return };
-        if let Ok(hw_dpi) = dev.get_dpi() {
-            if hw_dpi.x > 0 && (hw_dpi.x != self.dpi_x || hw_dpi.y != self.dpi_y) {
-                let old_dpi = self.dpi_x;
-                self.dpi_x = hw_dpi.x;
-                self.dpi_y = hw_dpi.y;
-                self.custom_dpi_input = hw_dpi.x as u32;
+    /// Synchronizes GUI state with changes made by the background worker thread.
+    fn sync_from_background(&mut self) {
+        let bg_dpi = self.runtime_state.current_dpi.load(Ordering::Relaxed);
+        let bg_stage = self.runtime_state.current_stage_idx.load(Ordering::Relaxed);
+        if bg_dpi > 0 && bg_dpi != self.dpi_x {
+            let old_dpi = self.dpi_x;
+            self.dpi_x = bg_dpi;
+            self.dpi_y = bg_dpi;
+            self.custom_dpi_input = bg_dpi as u32;
+            if let Some(pid) = self.active_pid {
+                let dev_entry = self.config.devices.entry(pid).or_default();
+                let prof = dev_entry.ensure_profiles().active_profile_mut();
+                prof.dpi = bg_dpi;
+                prof.current_stage_idx = bg_stage;
+                if let Some(pos) = prof.dpi_stages.iter().position(|&s| s == bg_dpi) {
+                    self.set_status(format!("DPI switched: {} DPI (Stage {})", bg_dpi, pos + 1), false);
+                } else {
+                    self.set_status(format!("DPI switched: {} -> {} DPI", old_dpi, bg_dpi), false);
+                }
+            }
+        }
 
-                crate::osd::show_dpi(hw_dpi.x);
-
-                if let Some(pid) = self.active_pid {
-                    let dev_entry = self.config.devices.entry(pid).or_default();
-                    let prof = dev_entry.ensure_profiles().active_profile_mut();
-                    prof.dpi = hw_dpi.x;
-                    if let Some(pos) = prof.dpi_stages.iter().position(|&s| s == hw_dpi.x) {
-                        prof.current_stage_idx = pos;
-                        self.set_status(format!("Hardware DPI switched: {} DPI (Stage {})", hw_dpi.x, pos + 1), false);
-                    } else {
-                        self.set_status(format!("Hardware DPI switched: {} -> {} DPI", old_dpi, hw_dpi.x), false);
-                    }
-                    let _ = self.config.save();
+        // Check if profile was switched in background
+        if let Some(bg_prof_id) = self.runtime_state.active_profile_id.read().unwrap().clone() {
+            if let Some(pid) = self.active_pid {
+                let dev_entry = self.config.devices.entry(pid).or_default();
+                let prof_cfg = dev_entry.ensure_profiles();
+                if prof_cfg.active_profile_id != bg_prof_id {
+                    self.config = AppConfig::load();
                 }
             }
         }
@@ -419,25 +665,34 @@ impl GuiApp {
     /// Cycles to the next DPI stage on both the hardware mouse and GUI config.
     pub fn cycle_dpi_stage(&mut self) {
         let Some(pid) = self.active_pid else { return };
-        let Some(dev) = &self.device else { return };
 
-        let dev_entry = self.config.devices.entry(pid).or_default();
-        let prof = dev_entry.ensure_profiles().active_profile_mut();
-        if prof.dpi_stages.is_empty() {
-            return;
-        }
+        let (target_dpi, next_idx) = {
+            let dev_entry = self.config.devices.entry(pid).or_default();
+            let prof = dev_entry.ensure_profiles().active_profile_mut();
+            if prof.dpi_stages.is_empty() {
+                return;
+            }
+            let next_idx = (prof.current_stage_idx + 1) % prof.dpi_stages.len();
+            prof.current_stage_idx = next_idx;
+            let target_dpi = prof.dpi_stages[next_idx];
+            prof.dpi = target_dpi;
+            (target_dpi, next_idx)
+        };
 
-        let next_idx = (prof.current_stage_idx + 1) % prof.dpi_stages.len();
-        prof.current_stage_idx = next_idx;
-        let target_dpi = prof.dpi_stages[next_idx];
-        prof.dpi = target_dpi;
         self.dpi_x = target_dpi;
         self.dpi_y = target_dpi;
         self.custom_dpi_input = target_dpi as u32;
 
+        self.runtime_state.current_stage_idx.store(next_idx, Ordering::SeqCst);
+        self.runtime_state.current_dpi.store(target_dpi, Ordering::SeqCst);
+
         crate::osd::show_dpi(target_dpi);
 
-        let r = dev.set_dpi(target_dpi, target_dpi);
+        let r = {
+            let dev_guard = self.runtime_state.device.lock().unwrap();
+            let Some(dev) = dev_guard.as_ref() else { return };
+            dev.set_dpi(target_dpi, target_dpi)
+        };
         self.apply(r, &format!("Switched to DPI Stage {}: {} DPI", next_idx + 1, target_dpi));
         let _ = self.config.save();
     }
@@ -445,24 +700,33 @@ impl GuiApp {
     /// Switches directly to a specific DPI stage index.
     pub fn set_dpi_stage(&mut self, stage_idx: usize) {
         let Some(pid) = self.active_pid else { return };
-        let Some(dev) = &self.device else { return };
 
-        let dev_entry = self.config.devices.entry(pid).or_default();
-        let prof = dev_entry.ensure_profiles().active_profile_mut();
-        if stage_idx >= prof.dpi_stages.len() {
-            return;
-        }
+        let target_dpi = {
+            let dev_entry = self.config.devices.entry(pid).or_default();
+            let prof = dev_entry.ensure_profiles().active_profile_mut();
+            if stage_idx >= prof.dpi_stages.len() {
+                return;
+            }
+            prof.current_stage_idx = stage_idx;
+            let target_dpi = prof.dpi_stages[stage_idx];
+            prof.dpi = target_dpi;
+            target_dpi
+        };
 
-        prof.current_stage_idx = stage_idx;
-        let target_dpi = prof.dpi_stages[stage_idx];
-        prof.dpi = target_dpi;
         self.dpi_x = target_dpi;
         self.dpi_y = target_dpi;
         self.custom_dpi_input = target_dpi as u32;
 
+        self.runtime_state.current_stage_idx.store(stage_idx, Ordering::SeqCst);
+        self.runtime_state.current_dpi.store(target_dpi, Ordering::SeqCst);
+
         crate::osd::show_dpi(target_dpi);
 
-        let r = dev.set_dpi(target_dpi, target_dpi);
+        let r = {
+            let dev_guard = self.runtime_state.device.lock().unwrap();
+            let Some(dev) = dev_guard.as_ref() else { return };
+            dev.set_dpi(target_dpi, target_dpi)
+        };
         self.apply(r, &format!("Switched to DPI Stage {}: {} DPI", stage_idx + 1, target_dpi));
         let _ = self.config.save();
     }
@@ -470,22 +734,30 @@ impl GuiApp {
     /// Sets a specific DPI value directly on hardware and saves it.
     pub fn apply_dpi_value(&mut self, target_dpi: u16) {
         let Some(pid) = self.active_pid else { return };
-        let Some(dev) = &self.device else { return };
 
         self.dpi_x = target_dpi;
         self.dpi_y = target_dpi;
         self.custom_dpi_input = target_dpi as u32;
 
+        self.runtime_state.current_dpi.store(target_dpi, Ordering::SeqCst);
+
         crate::osd::show_dpi(target_dpi);
 
-        let dev_entry = self.config.devices.entry(pid).or_default();
-        let prof = dev_entry.ensure_profiles().active_profile_mut();
-        prof.dpi = target_dpi;
-        if let Some(pos) = prof.dpi_stages.iter().position(|&s| s == target_dpi) {
-            prof.current_stage_idx = pos;
+        {
+            let dev_entry = self.config.devices.entry(pid).or_default();
+            let prof = dev_entry.ensure_profiles().active_profile_mut();
+            prof.dpi = target_dpi;
+            if let Some(pos) = prof.dpi_stages.iter().position(|&s| s == target_dpi) {
+                prof.current_stage_idx = pos;
+                self.runtime_state.current_stage_idx.store(pos, Ordering::SeqCst);
+            }
         }
 
-        let r = dev.set_dpi(target_dpi, target_dpi);
+        let r = {
+            let dev_guard = self.runtime_state.device.lock().unwrap();
+            let Some(dev) = dev_guard.as_ref() else { return };
+            dev.set_dpi(target_dpi, target_dpi)
+        };
         self.apply(r, &format!("DPI set to {} DPI", target_dpi));
         let _ = self.config.save();
     }
@@ -536,14 +808,17 @@ impl GuiApp {
         } else {
             &zones[selected_idx..=selected_idx]
         };
-        let dev = self.device.as_ref().unwrap();
         let mut failure = None;
-        for (i, zone) in targets.iter().enumerate() {
-            if i > 0 {
-                sleep(INTER_ZONE_DELAY);
-            }
-            if let Err(e) = f(dev, zone) {
-                failure.get_or_insert_with(|| format!("{} failed: {e}", zone.name));
+        {
+            let dev_guard = self.runtime_state.device.lock().unwrap();
+            let Some(dev) = dev_guard.as_ref() else { return };
+            for (i, zone) in targets.iter().enumerate() {
+                if i > 0 {
+                    sleep(INTER_ZONE_DELAY);
+                }
+                if let Err(e) = f(dev, zone) {
+                    failure.get_or_insert_with(|| format!("{} failed: {e}", zone.name));
+                }
             }
         }
         match failure {
@@ -568,23 +843,26 @@ impl GuiApp {
         } else {
             &zones[selected_idx..=selected_idx]
         };
-        let dev = self.device.as_ref().unwrap();
         let mut failure = None;
-        for (i, zone) in targets.iter().enumerate() {
-            if i > 0 {
-                sleep(INTER_ZONE_DELAY);
-            }
-            if let Err(e) = zone_f(dev, zone) {
-                failure.get_or_insert_with(|| format!("{} failed: {e}", zone.name));
-            }
-        }
-        if self.sync_zones {
-            if let Some(matrix_f) = matrix_f {
-                if !targets.is_empty() {
+        {
+            let dev_guard = self.runtime_state.device.lock().unwrap();
+            let Some(dev) = dev_guard.as_ref() else { return };
+            for (i, zone) in targets.iter().enumerate() {
+                if i > 0 {
                     sleep(INTER_ZONE_DELAY);
                 }
-                if let Err(e) = matrix_f(dev) {
-                    failure.get_or_insert_with(|| format!("Underglow failed: {e}"));
+                if let Err(e) = zone_f(dev, zone) {
+                    failure.get_or_insert_with(|| format!("{} failed: {e}", zone.name));
+                }
+            }
+            if self.sync_zones {
+                if let Some(matrix_f) = matrix_f {
+                    if !targets.is_empty() {
+                        sleep(INTER_ZONE_DELAY);
+                    }
+                    if let Err(e) = matrix_f(dev) {
+                        failure.get_or_insert_with(|| format!("Underglow failed: {e}"));
+                    }
                 }
             }
         }
@@ -617,54 +895,8 @@ impl eframe::App for GuiApp {
             self.last_scan = Instant::now();
         }
 
-        // Live hardware DPI polling: detects physical mouse DPI button cycle
-        if self.last_dpi_poll.elapsed() >= DPI_POLL_INTERVAL {
-            self.poll_hardware_dpi();
-            self.last_dpi_poll = Instant::now();
-        }
-
-        // Process button remapping commands from low-level hook
-        while let Some(cmd) = self.input_hook.try_recv_command() {
-            match cmd {
-                HookCommand::CycleDpi => self.cycle_dpi_stage(),
-                HookCommand::DpiUp => {
-                    if let Some(pid) = self.active_pid {
-                        let dev_entry = self.config.devices.entry(pid).or_default();
-                        let prof = dev_entry.ensure_profiles().active_profile();
-                        let next = (prof.current_stage_idx + 1).min(prof.dpi_stages.len().saturating_sub(1));
-                        self.set_dpi_stage(next);
-                    }
-                }
-                HookCommand::DpiDown => {
-                    if let Some(pid) = self.active_pid {
-                        let dev_entry = self.config.devices.entry(pid).or_default();
-                        let prof = dev_entry.ensure_profiles().active_profile();
-                        let next = prof.current_stage_idx.saturating_sub(1);
-                        self.set_dpi_stage(next);
-                    }
-                }
-                HookCommand::SetClutchDpi(clutch_dpi) => {
-                    if self.original_clutch_dpi.is_none() {
-                        self.original_clutch_dpi = Some(self.dpi_x);
-                    }
-                    if let Some(dev) = &self.device {
-                        let _ = dev.set_dpi(clutch_dpi, clutch_dpi);
-                        crate::osd::show_dpi(clutch_dpi);
-                        self.set_status(format!("Sniper Clutch Active: {clutch_dpi} DPI"), false);
-                    }
-                }
-                HookCommand::RestoreClutchDpi => {
-                    if let Some(orig) = self.original_clutch_dpi.take() {
-                        if let Some(dev) = &self.device {
-                            let _ = dev.set_dpi(orig, orig);
-                            crate::osd::show_dpi(orig);
-                            self.set_status(format!("DPI Restored: {orig} DPI"), false);
-                        }
-                    }
-                }
-                HookCommand::CycleProfile => self.cycle_active_profile(),
-            }
-        }
+        // Sync DPI, stage index, and active profile updated by the background worker
+        self.sync_from_background();
 
         static EGUI_CTX: std::sync::OnceLock<egui::Context> = std::sync::OnceLock::new();
         if EGUI_CTX.get().is_none() {
@@ -764,7 +996,7 @@ impl GuiApp {
         ui.horizontal(|ui| {
             // Brand Logo & Connected Dot
             ui.horizontal(|ui| {
-                widgets::status_dot(ui, self.device.is_some());
+                widgets::status_dot(ui, self.has_device());
                 ui.add_space(4.0);
                 ui.label(
                     egui::RichText::new("RazerLine")
@@ -865,7 +1097,7 @@ impl GuiApp {
     }
 
     fn ui_content(&mut self, ui: &mut egui::Ui) {
-        let Some(profile) = self.device.as_ref().map(|d| d.profile) else {
+        let Some(profile) = self.active_device_profile() else {
             ui.add_space(60.0);
             ui.vertical_centered(|ui| {
                 ui.label(
@@ -1244,7 +1476,13 @@ impl GuiApp {
                     for hz in poll.supported_hz {
                         let is_current = self.current_poll_hz == Some(*hz);
                         if ui.selectable_label(is_current, format!("{hz} Hz")).clicked() {
-                            let result = self.device.as_ref().unwrap().set_poll_rate(*hz);
+                            let result = {
+                                let dev_guard = self.runtime_state.device.lock().unwrap();
+                                dev_guard
+                                    .as_ref()
+                                    .map(|d| d.set_poll_rate(*hz))
+                                    .unwrap_or_else(|| Err(razer_hid_client::ClientError::Device("no device connected".into())))
+                            };
                             if result.is_ok() {
                                 self.current_poll_hz = Some(*hz);
                                 self.save_current_device_config();
@@ -1521,7 +1759,10 @@ impl GuiApp {
 
     fn ui_matrix_card(&mut self, ui: &mut egui::Ui) {
         widgets::card(ui, "Underglow", |ui| {
-            let dims = self.device.as_ref().and_then(|d| d.matrix_dims());
+            let dims = {
+                let dev_guard = self.runtime_state.device.lock().unwrap();
+                dev_guard.as_ref().and_then(|d| d.matrix_dims())
+            };
             let Some((rows, cols)) = dims else {
                 return;
             };
@@ -1544,12 +1785,18 @@ impl GuiApp {
             ui.horizontal(|ui| {
                 if ui.button("Fill").clicked() {
                     let color = self.matrix_color;
-                    let r = self.device.as_ref().unwrap().fill_matrix(color);
+                    let r = {
+                        let dev_guard = self.runtime_state.device.lock().unwrap();
+                        dev_guard.as_ref().map(|d| d.fill_matrix(color)).unwrap_or(Ok(()))
+                    };
                     self.apply(r, "Underglow filled");
                     self.save_current_device_config();
                 }
                 if ui.button("Off").clicked() {
-                    let r = self.device.as_ref().unwrap().fill_matrix([0, 0, 0]);
+                    let r = {
+                        let dev_guard = self.runtime_state.device.lock().unwrap();
+                        dev_guard.as_ref().map(|d| d.fill_matrix([0, 0, 0])).unwrap_or(Ok(()))
+                    };
                     self.apply(r, "Underglow off");
                     self.save_current_device_config();
                 }
@@ -1560,9 +1807,17 @@ impl GuiApp {
     fn ui_info_card(&mut self, ui: &mut egui::Ui) {
         widgets::card(ui, "Device Info", |ui| {
             if ui.button("Refresh Details").clicked() {
-                let dev = self.device.as_ref().unwrap();
-                let fw = dev.get_firmware_version();
-                let serial = dev.get_serial();
+                let (fw, serial) = {
+                    let dev_guard = self.runtime_state.device.lock().unwrap();
+                    if let Some(dev) = dev_guard.as_ref() {
+                        (dev.get_firmware_version(), dev.get_serial())
+                    } else {
+                        (
+                            Err(razer_hid_client::ClientError::Device("no device connected".into())),
+                            Err(razer_hid_client::ClientError::Device("no device connected".into())),
+                        )
+                    }
+                };
                 match (fw, serial) {
                     (Ok(fw), Ok(serial)) => {
                         self.info_text = Some(format!("Firmware: {fw}\nSerial:   {serial}"));

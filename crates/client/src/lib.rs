@@ -181,6 +181,9 @@ pub struct RazerDevice {
     pub profile: &'static DeviceProfile,
 }
 
+unsafe impl Send for RazerDevice {}
+unsafe impl Sync for RazerDevice {}
+
 impl Drop for RazerDevice {
     fn drop(&mut self) {
         if let Ok(api) = core_api() {
