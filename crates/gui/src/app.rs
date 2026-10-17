@@ -27,7 +27,9 @@ fn known_devices() -> &'static [DeviceProfile] {
     })
 }
 
+use crate::config::AppConfig;
 use crate::theme;
+use crate::tray::TrayManager;
 use crate::widgets::{self, PreviewKind};
 
 /// How often to actually re-enumerate USB devices. Decoupled from egui's
@@ -58,14 +60,21 @@ pub struct GuiApp {
     led_color: [u8; 3],
     brightness: u8,
     last_preview: PreviewKind,
+    current_effect_name: Option<String>,
 
     matrix_color: [u8; 3],
 
     info_text: Option<String>,
+
+    // Background & Tray & Config state
+    config: AppConfig,
+    _tray: Option<TrayManager>,
 }
 
-impl Default for GuiApp {
-    fn default() -> Self {
+impl GuiApp {
+    pub fn new() -> Self {
+        let config = AppConfig::load();
+        let tray = TrayManager::new().ok();
         let mut app = Self {
             device: None,
             connected: Vec::new(),
@@ -81,15 +90,16 @@ impl Default for GuiApp {
             led_color: [64, 209, 128],
             brightness: 100,
             last_preview: PreviewKind::Off,
+            current_effect_name: None,
             matrix_color: [64, 209, 128],
             info_text: None,
+            config,
+            _tray: tray,
         };
         app.rescan();
         app
     }
-}
 
-impl GuiApp {
     /// Re-enumerates connected devices and reconciles state against what
     /// was already open — called on a timer from `update()`, not just on
     /// startup, so plugging/unplugging a device is picked up live without
@@ -121,28 +131,203 @@ impl GuiApp {
         }
     }
 
+    /// Opens the specified device profile and restores any previously configured
+    /// settings (DPI, polling rate, lighting effects, brightness).
     fn open(&mut self, profile: &'static DeviceProfile) {
         match RazerDevice::open(profile) {
             Ok(dev) => {
-                // Show the device's actual current DPI rather than a
-                // hardcoded guess — if the query isn't supported or fails,
-                // just keep whatever was there before.
-                if let Ok(current) = dev.get_dpi() {
-                    self.dpi_x = current.x;
-                    self.dpi_y = current.y;
-                }
-                self.current_poll_hz = dev.get_poll_rate().ok();
-                self.active_pid = Some(profile.product_id);
-                self.device = Some(dev);
+                let pid = profile.product_id;
+                self.active_pid = Some(pid);
                 self.info_text = None;
                 self.selected_zone_idx = 0;
-                self.set_status(format!("Connected to {}", profile.name), false);
+
+                // Load configured settings if present for this device
+                if let Some(cfg) = self.config.devices.get(&pid).cloned() {
+                    let mut applied_items = Vec::new();
+
+                    // 1. Restore configured DPI
+                    if let (Some(x), Some(y)) = (cfg.dpi_x, cfg.dpi_y) {
+                        if profile.dpi.is_some() {
+                            if dev.set_dpi(x, y).is_ok() {
+                                self.dpi_x = x;
+                                self.dpi_y = y;
+                                applied_items.push("DPI");
+                            }
+                        }
+                    } else if let Ok(current) = dev.get_dpi() {
+                        self.dpi_x = current.x;
+                        self.dpi_y = current.y;
+                    }
+
+                    // 2. Restore configured Polling Rate
+                    if let Some(hz) = cfg.poll_rate_hz {
+                        if profile.poll_rate.is_some() {
+                            if dev.set_poll_rate(hz).is_ok() {
+                                self.current_poll_hz = Some(hz);
+                                applied_items.push("Polling rate");
+                            }
+                        }
+                    } else {
+                        self.current_poll_hz = dev.get_poll_rate().ok();
+                    }
+
+                    // 3. Restore configured lighting properties
+                    if let Some(sync) = cfg.sync_zones {
+                        self.sync_zones = sync;
+                    }
+                    if let Some(color) = cfg.led_color {
+                        self.led_color = color;
+                    }
+                    if let Some(b) = cfg.brightness {
+                        self.brightness = b;
+                        for zone in profile.leds {
+                            let _ = dev.set_led_brightness(zone, b);
+                        }
+                    }
+
+                    // 4. Restore configured lighting effect
+                    if let Some(ref eff) = cfg.effect {
+                        self.current_effect_name = Some(eff.clone());
+                        let color = self.led_color;
+                        let zones = profile.leds;
+                        let has_matrix = profile.matrix.is_some();
+                        let matrix_has_effects =
+                            profile.matrix.and_then(|m| m.effect_led_id).is_some();
+
+                        match eff.as_str() {
+                            "static" => {
+                                self.last_preview = PreviewKind::Static;
+                                for (i, zone) in zones.iter().enumerate() {
+                                    if i > 0 {
+                                        sleep(INTER_ZONE_DELAY);
+                                    }
+                                    let _ = dev.set_led_static(zone, color);
+                                }
+                                if has_matrix {
+                                    sleep(INTER_ZONE_DELAY);
+                                    let _ = dev.fill_matrix(color);
+                                }
+                                applied_items.push("Lighting");
+                            }
+                            "spectrum" => {
+                                self.last_preview = PreviewKind::Spectrum;
+                                for (i, zone) in zones.iter().enumerate() {
+                                    if i > 0 {
+                                        sleep(INTER_ZONE_DELAY);
+                                    }
+                                    let _ = dev.set_led_spectrum(zone);
+                                }
+                                if matrix_has_effects {
+                                    sleep(INTER_ZONE_DELAY);
+                                    let _ = dev.set_matrix_spectrum();
+                                }
+                                applied_items.push("Lighting");
+                            }
+                            "breathing" => {
+                                self.last_preview = PreviewKind::Breathing;
+                                for (i, zone) in zones.iter().enumerate() {
+                                    if i > 0 {
+                                        sleep(INTER_ZONE_DELAY);
+                                    }
+                                    let _ = dev.set_led_breathing(zone, color);
+                                }
+                                applied_items.push("Lighting");
+                            }
+                            "wave" => {
+                                self.last_preview = PreviewKind::Wave;
+                                for (i, zone) in zones.iter().enumerate() {
+                                    if i > 0 {
+                                        sleep(INTER_ZONE_DELAY);
+                                    }
+                                    let _ = dev.set_led_wave(zone, 1);
+                                }
+                                if matrix_has_effects {
+                                    sleep(INTER_ZONE_DELAY);
+                                    let _ = dev.set_matrix_wave(1);
+                                }
+                                applied_items.push("Lighting");
+                            }
+                            "off" => {
+                                self.last_preview = PreviewKind::Off;
+                                for (i, zone) in zones.iter().enumerate() {
+                                    if i > 0 {
+                                        sleep(INTER_ZONE_DELAY);
+                                    }
+                                    let _ = dev.set_led_off(zone);
+                                }
+                                if has_matrix {
+                                    sleep(INTER_ZONE_DELAY);
+                                    let _ = dev.fill_matrix([0, 0, 0]);
+                                }
+                                applied_items.push("Lighting");
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    // 5. Restore matrix/underglow
+                    if let Some(m_color) = cfg.matrix_color {
+                        if profile.matrix.is_some() {
+                            self.matrix_color = m_color;
+                            let _ = dev.fill_matrix(m_color);
+                        }
+                    }
+
+                    self.device = Some(dev);
+                    if applied_items.is_empty() {
+                        self.set_status(format!("Connected to {}", profile.name), false);
+                    } else {
+                        self.set_status(
+                            format!(
+                                "Connected to {} (restored configured {})",
+                                profile.name,
+                                applied_items.join(", ")
+                            ),
+                            false,
+                        );
+                    }
+                } else {
+                    // No saved settings for this device yet — query current hardware values
+                    if let Ok(current) = dev.get_dpi() {
+                        self.dpi_x = current.x;
+                        self.dpi_y = current.y;
+                    }
+                    self.current_poll_hz = dev.get_poll_rate().ok();
+                    self.device = Some(dev);
+                    self.set_status(format!("Connected to {}", profile.name), false);
+                }
             }
             Err(e) => {
                 self.device = None;
                 self.active_pid = None;
                 self.set_status(format!("Couldn't open {}: {e}", profile.name), true);
             }
+        }
+    }
+
+    /// Persists current device settings to the configuration file.
+    fn save_current_device_config(&mut self) {
+        if let Some(pid) = self.active_pid {
+            let name = self
+                .device
+                .as_ref()
+                .map(|d| d.profile.name)
+                .unwrap_or("Razer Device");
+            let (x, y) = (self.dpi_x, self.dpi_y);
+            let poll = self.current_poll_hz;
+            let brightness = self.brightness;
+            let color = self.led_color;
+            let sync = self.sync_zones;
+            let effect = self.current_effect_name.clone();
+            let matrix = self
+                .device
+                .as_ref()
+                .and_then(|d| d.matrix_dims())
+                .map(|_| self.matrix_color);
+
+            self.config
+                .update_device(pid, name, x, y, poll, brightness, color, sync, effect, matrix);
+            let _ = self.config.save();
         }
     }
 
@@ -242,12 +427,23 @@ impl GuiApp {
     }
 }
 
+impl Default for GuiApp {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl eframe::App for GuiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Live USB detection: egui only calls update() on input by
-        // default, so request a wakeup even when idle — this is what
-        // makes plugging/unplugging a device show up without the user
-        // touching anything.
+        // Window close interception: if close_to_tray is true, hide to tray instead of quitting
+        if ctx.input(|i| i.viewport().close_requested()) {
+            if self.config.close_to_tray {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                crate::win_util::hide_window();
+            }
+        }
+
+        // Live USB detection: re-scan periodically
         if self.last_scan.elapsed() >= SCAN_INTERVAL {
             self.rescan();
             self.last_scan = Instant::now();
@@ -366,6 +562,8 @@ impl GuiApp {
                     .color(theme::MUTED),
                 );
             });
+            ui.add_space(30.0);
+            self.ui_system_settings_card(ui);
             return;
         };
 
@@ -388,6 +586,9 @@ impl GuiApp {
         if profile.identity.is_some() {
             self.ui_info_card(ui);
         }
+
+        // System & background settings card
+        self.ui_system_settings_card(ui);
     }
 
     fn ui_performance_card(&mut self, ui: &mut egui::Ui, profile: &'static DeviceProfile) {
@@ -398,31 +599,44 @@ impl GuiApp {
                 // A slider spanning a device's full DPI range (often
                 // 100-45000) is too coarse to land on an exact value —
                 // type the number directly instead, with presets for the
-                // common values. X and Y are kept equal and not exposed
-                // separately; nothing in this UI needs independent axes.
-                ui.add(
-                    egui::DragValue::new(&mut self.dpi_x)
-                        .range(dpi.min..=dpi.max)
-                        .speed(5)
-                        .suffix(" DPI"),
-                );
-                self.dpi_y = self.dpi_x;
+                // common steps.
+                let mut x = self.dpi_x as u32;
+                let mut y = self.dpi_y as u32;
+
+                ui.horizontal(|ui| {
+                    ui.label("X:");
+                    ui.add(
+                        egui::DragValue::new(&mut x)
+                            .range(dpi.min..=dpi.max)
+                            .speed(50.0),
+                    );
+                    ui.add_space(10.0);
+                    ui.label("Y:");
+                    ui.add(
+                        egui::DragValue::new(&mut y)
+                            .range(dpi.min..=dpi.max)
+                            .speed(50.0),
+                    );
+                });
+                self.dpi_x = x as u16;
+                self.dpi_y = y as u16;
 
                 ui.add_space(6.0);
                 ui.horizontal_wrapped(|ui| {
-                    const PRESETS: [u16; 9] =
-                        [400, 800, 1200, 1600, 2400, 3200, 6400, 12800, 16000];
-                    for preset in PRESETS {
-                        if preset < dpi.min || preset > dpi.max {
-                            continue;
-                        }
-                        let is_current = self.dpi_x == preset;
-                        if ui
-                            .selectable_label(is_current, preset.to_string())
-                            .clicked()
-                        {
-                            self.dpi_x = preset;
-                            self.dpi_y = preset;
+                    ui.label(egui::RichText::new("Presets:").small().color(theme::MUTED));
+                    for preset in [400, 800, 1600, 3200, 6400] {
+                        if preset >= dpi.min && preset <= dpi.max {
+                            if ui.button(preset.to_string()).clicked() {
+                                self.dpi_x = preset as u16;
+                                self.dpi_y = preset as u16;
+                                let result = self
+                                    .device
+                                    .as_ref()
+                                    .unwrap()
+                                    .set_dpi(self.dpi_x, self.dpi_y);
+                                self.apply(result, &format!("DPI set to {preset}"));
+                                self.save_current_device_config();
+                            }
                         }
                     }
                 });
@@ -432,6 +646,7 @@ impl GuiApp {
                     let (x, y) = (self.dpi_x, self.dpi_y);
                     let result = self.device.as_ref().unwrap().set_dpi(x, y);
                     self.apply(result, &format!("DPI set to {x}"));
+                    self.save_current_device_config();
                 }
                 ui.add_space(10.0);
             }
@@ -452,6 +667,7 @@ impl GuiApp {
                             let result = self.device.as_ref().unwrap().set_poll_rate(*hz);
                             if result.is_ok() {
                                 self.current_poll_hz = Some(*hz);
+                                self.save_current_device_config();
                             }
                             self.apply(result, &format!("Polling rate set to {hz}Hz"));
                         }
@@ -498,25 +714,7 @@ impl GuiApp {
                                 }
                             });
                     }
-                    if has_matrix {
-                        ui.label(
-                            egui::RichText::new("Underglow has its own card below in this mode.")
-                                .small()
-                                .color(theme::MUTED),
-                        );
-                    }
-                } else {
-                    let mut names: Vec<_> = zones.iter().map(|z| z.name).collect();
-                    if has_matrix {
-                        names.push("Underglow (color/off only)");
-                    }
-                    ui.label(
-                        egui::RichText::new(format!("Applies to: {}", names.join(", ")))
-                            .small()
-                            .color(theme::MUTED),
-                    );
                 }
-                ui.add_space(6.0);
             }
 
             let any_brightness = if self.sync_zones {
@@ -538,6 +736,7 @@ impl GuiApp {
                 if ui.button("Static").clicked() {
                     let color = self.led_color;
                     self.last_preview = PreviewKind::Static;
+                    self.current_effect_name = Some("static".to_string());
                     self.apply_to_zones_and_matrix(
                         zones,
                         zone_idx,
@@ -545,21 +744,25 @@ impl GuiApp {
                         has_matrix.then_some(move |dev: &RazerDevice| dev.fill_matrix(color)),
                         "LED set to static color",
                     );
+                    self.save_current_device_config();
                 }
                 if supports(razer_hid_abi::commands::LedEffect::Breathing)
                     && ui.button("Breathing").clicked()
                 {
                     let color = self.led_color;
                     self.last_preview = PreviewKind::Breathing;
+                    self.current_effect_name = Some("breathing".to_string());
                     self.apply_to_zones(
                         zones,
                         zone_idx,
                         |dev, zone| dev.set_led_breathing(zone, color),
                         "LED breathing",
                     );
+                    self.save_current_device_config();
                 }
                 if ui.button("Spectrum").clicked() {
                     self.last_preview = PreviewKind::Spectrum;
+                    self.current_effect_name = Some("spectrum".to_string());
                     self.apply_to_zones_and_matrix(
                         zones,
                         zone_idx,
@@ -567,9 +770,11 @@ impl GuiApp {
                         matrix_has_effects.then_some(|dev: &RazerDevice| dev.set_matrix_spectrum()),
                         "LED cycling spectrum",
                     );
+                    self.save_current_device_config();
                 }
                 if ui.button("Wave").clicked() {
                     self.last_preview = PreviewKind::Wave;
+                    self.current_effect_name = Some("wave".to_string());
                     self.apply_to_zones_and_matrix(
                         zones,
                         zone_idx,
@@ -577,9 +782,11 @@ impl GuiApp {
                         matrix_has_effects.then_some(|dev: &RazerDevice| dev.set_matrix_wave(1)),
                         "LED wave",
                     );
+                    self.save_current_device_config();
                 }
                 if ui.button("Off").clicked() {
                     self.last_preview = PreviewKind::Off;
+                    self.current_effect_name = Some("off".to_string());
                     self.apply_to_zones_and_matrix(
                         zones,
                         zone_idx,
@@ -587,15 +794,11 @@ impl GuiApp {
                         has_matrix.then_some(|dev: &RazerDevice| dev.fill_matrix([0, 0, 0])),
                         "LED off",
                     );
+                    self.save_current_device_config();
                 }
             });
-            ui.add_space(4.0);
-            ui.label(
-                egui::RichText::new("Spectrum and Wave always cycle through colors — the picker above only applies to Static and Breathing.")
-                    .small()
-                    .color(theme::MUTED),
-            );
-            if self.sync_zones && has_matrix && !matrix_has_effects {
+
+            if !self.sync_zones && has_matrix {
                 ui.label(
                     egui::RichText::new(
                         "Underglow only supports a solid color or off — Breathing/Spectrum/Wave don't reach it.",
@@ -629,6 +832,7 @@ impl GuiApp {
                         |dev, zone| dev.set_led_brightness(zone, b),
                         "Brightness updated",
                     );
+                    self.save_current_device_config();
                 }
             }
         });
@@ -661,10 +865,12 @@ impl GuiApp {
                     let color = self.matrix_color;
                     let r = self.device.as_ref().unwrap().fill_matrix(color);
                     self.apply(r, "Underglow filled");
+                    self.save_current_device_config();
                 }
                 if ui.button("Off").clicked() {
                     let r = self.device.as_ref().unwrap().fill_matrix([0, 0, 0]);
                     self.apply(r, "Underglow off");
+                    self.save_current_device_config();
                 }
             });
         });
@@ -690,16 +896,102 @@ impl GuiApp {
             }
         });
     }
+
+    fn ui_system_settings_card(&mut self, ui: &mut egui::Ui) {
+        widgets::card(ui, "System & Background", |ui| {
+            let mut autostart_changed = false;
+            let mut close_tray_changed = false;
+
+            ui.horizontal(|ui| {
+                if ui
+                    .checkbox(&mut self.config.start_with_windows, "Start with Windows")
+                    .changed()
+                {
+                    autostart_changed = true;
+                }
+            });
+            ui.label(
+                egui::RichText::new("Automatically start RazerLine in the system tray on Windows startup.")
+                    .small()
+                    .color(theme::MUTED),
+            );
+
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .checkbox(&mut self.config.close_to_tray, "Minimize to tray on close")
+                    .changed()
+                {
+                    close_tray_changed = true;
+                }
+            });
+            ui.label(
+                egui::RichText::new("Keep running in the background when closing the window with the 'X' button.")
+                    .small()
+                    .color(theme::MUTED),
+            );
+
+            ui.add_space(10.0);
+            ui.horizontal(|ui| {
+                if ui.button("Save Settings as Default").clicked() {
+                    self.save_current_device_config();
+                    self.set_status("Configured settings saved", false);
+                }
+                if ui.button("Reload from Disk").clicked() {
+                    self.config = AppConfig::load();
+                    if let Some(profile) = self
+                        .connected
+                        .iter()
+                        .find(|p| Some(p.product_id) == self.active_pid)
+                        .copied()
+                    {
+                        self.open(profile);
+                    }
+                    self.set_status("Settings reloaded from disk", false);
+                }
+            });
+
+            if autostart_changed {
+                let enabled = self.config.start_with_windows;
+                if let Err(e) = crate::autostart::set_autostart(enabled) {
+                    self.set_status(format!("Autostart setting failed: {e}"), true);
+                } else {
+                    let msg = if enabled {
+                        "Start with Windows enabled (runs in background on boot)"
+                    } else {
+                        "Start with Windows disabled"
+                    };
+                    self.set_status(msg, false);
+                    let _ = self.config.save();
+                }
+            }
+
+            if close_tray_changed {
+                let _ = self.config.save();
+            }
+
+            ui.add_space(6.0);
+            ui.label(
+                egui::RichText::new(format!(
+                    "Config file: {}",
+                    AppConfig::file_path().display()
+                ))
+                .small()
+                .color(theme::MUTED),
+            );
+        });
+    }
 }
 
-pub fn run() -> eframe::Result<()> {
+pub fn run(start_in_background: bool) -> eframe::Result<()> {
     let icon = eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png"))
         .expect("bundled icon.png is a valid PNG — generated from assets/razer-inspired-logo.svg");
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([620.0, 680.0])
-            .with_icon(icon),
+            .with_inner_size([620.0, 720.0])
+            .with_icon(icon)
+            .with_visible(!start_in_background),
         ..Default::default()
     };
     eframe::run_native(
@@ -707,7 +999,7 @@ pub fn run() -> eframe::Result<()> {
         options,
         Box::new(|cc| {
             theme::apply(&cc.egui_ctx);
-            Ok(Box::new(GuiApp::default()))
+            Ok(Box::new(GuiApp::new()))
         }),
     )
 }

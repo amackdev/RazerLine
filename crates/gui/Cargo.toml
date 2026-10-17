@@ -15,3 +15,14 @@ path = "src/main.rs"
 razer-hid-abi = { path = "../abi" }
 razer-hid-client = { path = "../client" }
 eframe = "0.28"
+image = { version = "0.25", default-features = false, features = ["png"] }
+tray-icon = "0.26.1"
+muda = "0.21.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.56"
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"

@@ -9,9 +9,24 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
+mod autostart;
+mod config;
 mod theme;
+mod tray;
 mod widgets;
+mod win_util;
 
 fn main() -> eframe::Result<()> {
-    app::run()
+    // Single instance enforcement: if an instance is already running,
+    // bring it to the foreground and exit this duplicate process immediately.
+    if !win_util::acquire_single_instance() {
+        return Ok(());
+    }
+
+    let args: Vec<String> = std::env::args().collect();
+    let start_in_background = args.iter().any(|arg| {
+        arg == "--background" || arg == "--minimized" || arg == "-b"
+    });
+
+    app::run(start_in_background)
 }

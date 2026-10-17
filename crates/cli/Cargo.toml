@@ -15,3 +15,6 @@ path = "src/main.rs"
 razer-hid-abi = { path = "../abi" }
 razer-hid-client = { path = "../client" }
 clap.workspace = true
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"
