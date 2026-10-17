@@ -1,9 +1,7 @@
 name: Release
 
-# Builds and attaches platform binaries to a GitHub Release whenever a
-# version tag (v1.2.3) is pushed. Doesn't publish to crates.io — this is
-# an end-user application, not a library other crates are meant to depend
-# on.
+# Builds and attaches Windows binaries and MSI installer to a GitHub Release whenever a
+# version tag (v1.2.3) is pushed.
 
 on:
   push:
@@ -13,62 +11,40 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            archive_ext: tar.gz
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            archive_ext: zip
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            archive_ext: tar.gz
-    runs-on: ${{ matrix.os }}
+  build-windows:
+    name: Build & Package (Windows x64)
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
-      - name: Install Linux build dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libudev-dev pkg-config libxkbcommon-dev libgtk-3-dev
-      - name: Build
-        run: cargo build --workspace --release --target ${{ matrix.target }}
 
-      - name: Package (Unix)
-        if: runner.os != 'Windows'
-        shell: bash
-        run: |
-          set -euo pipefail
-          stage="razerline-${{ github.ref_name }}-${{ matrix.target }}"
-          mkdir -p "$stage"
-          cp target/${{ matrix.target }}/release/razer-ctl "$stage/"
-          cp target/${{ matrix.target }}/release/razerline "$stage/"
-          cp README.md LICENSE "$stage/"
-          [ -d udev ] && cp -r udev "$stage/"
-          tar czf "$stage.tar.gz" "$stage"
-          echo "ASSET=$stage.tar.gz" >> "$GITHUB_ENV"
+      - name: Build Workspace
+        run: cargo build --workspace --release
 
-      - name: Package (Windows)
-        if: runner.os == 'Windows'
+      - name: Install WiX Toolset
+        run: dotnet tool install --global wix
+
+      - name: Build MSI Installer
+        shell: pwsh
+        run: .\installer\build-installer.ps1 -SkipBuild
+
+      - name: Package Portable Zip
         shell: pwsh
         run: |
-          $stage = "razerline-${{ github.ref_name }}-${{ matrix.target }}"
+          $stage = "razerline-${{ github.ref_name }}-windows-x64"
           New-Item -ItemType Directory -Path $stage | Out-Null
-          Copy-Item "target/${{ matrix.target }}/release/razer-ctl.exe" $stage/
-          Copy-Item "target/${{ matrix.target }}/release/razerline.exe" $stage/
+          Copy-Item "target/release/razerline.exe" $stage/
+          Copy-Item "target/release/razer_hid_core.dll" $stage/
+          Copy-Item "target/release/razer_hid_devices_mice.dll" $stage/
           Copy-Item README.md, LICENSE $stage/
           Compress-Archive -Path $stage -DestinationPath "$stage.zip"
-          echo "ASSET=$stage.zip" >> $env:GITHUB_ENV
+          echo "ZIP_ASSET=$stage.zip" >> $env:GITHUB_ENV
+          echo "MSI_ASSET=installer/output/RazerLine-0.1.0-x64.msi" >> $env:GITHUB_ENV
 
-      - name: Upload release asset
+      - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ env.ASSET }}
+          files: |
+            ${{ env.MSI_ASSET }}
+            ${{ env.ZIP_ASSET }}

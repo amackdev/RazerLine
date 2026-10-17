@@ -5,4 +5,4 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "Shared data shapes and dispatch op-codes for the razer-hid-ctl DLL boundary"
+description = "Shared data shapes and dispatch op-codes for the RazerLine DLL boundary"

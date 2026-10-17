@@ -37,9 +37,8 @@ pub enum DeviceError {
     Unsupported(&'static str, &'static str),
     #[error(
         "found {0} matching USB interface(s) for {1}, but none of them accepted a feature \
-         report (last error: {2}). Run `razer-ctl debug-usb` to see every raw interface — on \
-         Windows in particular, the plain mouse/keyboard interface rejects Set/GetFeature and \
-         only a separate vendor-control interface accepts it."
+         report (last error: {2}) — on Windows in particular, the plain mouse/keyboard \
+         interface rejects Set/GetFeature and only a separate vendor-control interface accepts it."
     )]
     NoWorkingInterface(usize, &'static str, Box<DeviceError>),
 }
@@ -50,7 +49,7 @@ pub struct DpiSetting {
 }
 
 /// Raw info about one HID interface, for diagnosing which one a device's
-/// control traffic actually lives on (`razer-ctl debug-usb`).
+/// control traffic actually lives on.
 #[derive(Debug, Clone)]
 pub struct InterfaceInfo {
     pub vendor_id: u16,

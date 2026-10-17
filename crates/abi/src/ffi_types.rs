@@ -3,10 +3,9 @@
 //! which are just byte buffers) — shared here so `razer-hid-client` can
 //! decode exactly what `razer-hid-core`'s `ffi` module writes.
 
-/// Fixed-layout mirror of one HID interface, for the `razer-ctl
-/// debug-usb` diagnostic. `product_string`/`path` are truncated to
-/// their buffer size rather than allocated, since this is a debug aid,
-/// not a hot path.
+/// Fixed-layout mirror of one HID interface for interface diagnostics.
+/// `product_string`/`path` are truncated to their buffer size rather than
+/// allocated, since this is a diagnostic aid, not a hot path.
 #[repr(C)]
 pub struct FfiInterfaceInfo {
     pub vendor_id: u16,

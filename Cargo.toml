@@ -6,7 +6,6 @@ members = [
     "crates/core",
     "crates/devices-mice",
     "crates/client",
-    "crates/cli",
     "crates/gui",
 ]
 
@@ -14,11 +13,10 @@ members = [
 version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
-repository = "https://github.com/amackdev/razer-hid-ctl"
-authors = ["razer-hid-ctl contributors"]
+repository = "https://github.com/amackdev/RazerLine"
+authors = ["RazerLine contributors"]
 
 [workspace.dependencies]
 hidapi = "2.6"
 thiserror = "1.0"
-clap = { version = "4", features = ["derive"] }
 libloading = "0.8"

@@ -151,7 +151,7 @@ pub fn list_connected(
 }
 
 /// Every raw HID interface under `vendor_id`, regardless of whether it
-/// matches a known profile (`razer-ctl debug-usb`).
+/// matches a known profile.
 pub fn debug_list_interfaces(vendor_id: u16) -> Result<Vec<InterfaceInfo>, ClientError> {
     let api = core_api()?;
     let mut buf: Vec<FfiInterfaceInfo> = (0..64).map(|_| unsafe { std::mem::zeroed() }).collect();
