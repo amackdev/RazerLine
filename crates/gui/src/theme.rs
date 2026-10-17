@@ -38,10 +38,9 @@ pub fn apply(ctx: &egui::Context) {
 fn load_system_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
     if let Ok(data) = std::fs::read("C:\\Windows\\Fonts\\segoeui.ttf") {
-        fonts.font_data.insert(
-            "segoe_ui".to_owned(),
-            egui::FontData::from_owned(data),
-        );
+        fonts
+            .font_data
+            .insert("segoe_ui".to_owned(), egui::FontData::from_owned(data));
         fonts
             .families
             .entry(egui::FontFamily::Proportional)

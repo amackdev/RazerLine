@@ -5,8 +5,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
 use crate::profiles::DeviceProfileConfig;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -114,9 +114,10 @@ impl AppConfig {
                 }
             }
         }
-        let mut cfg = Self::default();
-        cfg.start_with_windows = crate::autostart::is_autostart_enabled();
-        cfg
+        Self {
+            start_with_windows: crate::autostart::is_autostart_enabled(),
+            ..Default::default()
+        }
     }
 
     /// Persists configuration to disk.
@@ -125,13 +126,14 @@ impl AppConfig {
         if let Some(parent) = path.parent() {
             let _ = fs::create_dir_all(parent);
         }
-        let data = serde_json::to_string_pretty(self)
-            .map_err(|e| format!("Serialization error: {e}"))?;
+        let data =
+            serde_json::to_string_pretty(self).map_err(|e| format!("Serialization error: {e}"))?;
         fs::write(&path, data).map_err(|e| format!("Write error: {e}"))?;
         Ok(())
     }
 
     /// Updates or creates configured settings for a specific device.
+    #[allow(clippy::too_many_arguments)]
     pub fn update_device(
         &mut self,
         pid: u16,

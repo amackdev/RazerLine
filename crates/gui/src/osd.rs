@@ -31,7 +31,12 @@ pub fn show_dpi(dpi: u16) {
         let hwnd = OSD_HWND.load(Ordering::SeqCst);
         if hwnd != 0 {
             unsafe {
-                win32::PostMessageW(hwnd as win32::HWND, win32::WM_SHOW_DPI, dpi as win32::WPARAM, 0);
+                win32::PostMessageW(
+                    hwnd as win32::HWND,
+                    win32::WM_SHOW_DPI,
+                    dpi as win32::WPARAM,
+                    0,
+                );
             }
         }
     }
@@ -257,7 +262,7 @@ pub fn init() {}
 pub fn show_dpi(_dpi: u16) {}
 
 #[cfg(windows)]
-#[allow(non_snake_case)]
+#[allow(non_snake_case, non_camel_case_types, clippy::upper_case_acronyms)]
 mod win32 {
     use std::ffi::c_void;
 
@@ -394,7 +399,8 @@ mod win32 {
             cy: i32,
             uFlags: u32,
         ) -> BOOL;
-        pub fn SetLayeredWindowAttributes(hwnd: HWND, crKey: u32, bAlpha: u8, dwFlags: u32) -> BOOL;
+        pub fn SetLayeredWindowAttributes(hwnd: HWND, crKey: u32, bAlpha: u8, dwFlags: u32)
+            -> BOOL;
         pub fn InvalidateRect(hWnd: HWND, lpRect: *const RECT, bErase: BOOL) -> BOOL;
         pub fn BeginPaint(hWnd: HWND, lpPaint: *mut PAINTSTRUCT) -> HDC;
         pub fn EndPaint(hWnd: HWND, lpPaint: *const PAINTSTRUCT) -> BOOL;
@@ -412,14 +418,7 @@ mod win32 {
             width: i32,
             height: i32,
         ) -> BOOL;
-        pub fn CreateRoundRectRgn(
-            x1: i32,
-            y1: i32,
-            x2: i32,
-            y2: i32,
-            w: i32,
-            h: i32,
-        ) -> HRGN;
+        pub fn CreateRoundRectRgn(x1: i32, y1: i32, x2: i32, y2: i32, w: i32, h: i32) -> HRGN;
         pub fn SetWindowRgn(hWnd: HWND, hRgn: HRGN, bRedraw: BOOL) -> i32;
         pub fn SetTextColor(hdc: HDC, color: u32) -> u32;
         pub fn SetBkMode(hdc: HDC, mode: i32) -> i32;

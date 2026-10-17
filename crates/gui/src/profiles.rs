@@ -1,8 +1,8 @@
 //! Profile management system for RazerLine.
 //! Supports multiple named profiles per device with fast switching, cloning, and persistence.
 
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use crate::buttons::{ButtonAction, MouseButtonId};
 
@@ -31,7 +31,11 @@ impl DeviceProfileConfig {
     }
 
     pub fn active_profile_mut(&mut self) -> &mut UserProfile {
-        if let Some(idx) = self.profiles.iter().position(|p| p.id == self.active_profile_id) {
+        if let Some(idx) = self
+            .profiles
+            .iter()
+            .position(|p| p.id == self.active_profile_id)
+        {
             &mut self.profiles[idx]
         } else {
             &mut self.profiles[0]
@@ -40,7 +44,13 @@ impl DeviceProfileConfig {
 
     pub fn create_profile(&mut self, name: &str) -> String {
         let base = self.active_profile().clone();
-        let id = format!("profile_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis());
+        let id = format!(
+            "profile_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis()
+        );
         let mut new_profile = base;
         new_profile.id = id.clone();
         new_profile.name = name.to_string();
@@ -262,10 +272,12 @@ mod tests {
 
     #[test]
     fn test_sort_stages() {
-        let mut p = UserProfile::default();
-        p.dpi_stages = vec![3200, 400, 1600];
-        p.current_stage_idx = 0;
-        p.dpi = 3200;
+        let mut p = UserProfile {
+            dpi_stages: vec![3200, 400, 1600],
+            current_stage_idx: 0,
+            dpi: 3200,
+            ..Default::default()
+        };
 
         p.sort_stages();
         assert_eq!(p.dpi_stages, vec![400, 1600, 3200]);

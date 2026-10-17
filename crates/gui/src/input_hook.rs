@@ -30,6 +30,7 @@ static COMMAND_SENDER: OnceLock<Sender<HookCommand>> = OnceLock::new();
 static HOOK_THREAD_ID: AtomicU32 = AtomicU32::new(0);
 
 #[cfg(windows)]
+#[allow(non_snake_case, non_camel_case_types, clippy::upper_case_acronyms)]
 mod win32 {
     use std::ffi::c_void;
 
@@ -41,7 +42,8 @@ mod win32 {
     pub type LRESULT = isize;
     pub type BOOL = i32;
 
-    pub type HOOKPROC = unsafe extern "system" fn(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT;
+    pub type HOOKPROC =
+        unsafe extern "system" fn(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT;
 
     pub const WH_MOUSE_LL: i32 = 14;
 
@@ -112,13 +114,23 @@ mod win32 {
 
     #[link(name = "user32")]
     extern "system" {
-        pub fn SetWindowsHookExW(idHook: i32, lpfn: HOOKPROC, hmod: HINSTANCE, dwThreadId: u32) -> HHOOK;
+        pub fn SetWindowsHookExW(
+            idHook: i32,
+            lpfn: HOOKPROC,
+            hmod: HINSTANCE,
+            dwThreadId: u32,
+        ) -> HHOOK;
         pub fn UnhookWindowsHookEx(hhk: HHOOK) -> BOOL;
         pub fn CallNextHookEx(hhk: HHOOK, nCode: i32, wParam: WPARAM, lParam: LPARAM) -> LRESULT;
         pub fn keybd_event(bVk: u8, bScan: u8, dwFlags: u32, dwExtraInfo: usize);
         pub fn mouse_event(dwFlags: u32, dx: u32, dy: u32, dwData: u32, dwExtraInfo: usize);
         pub fn LockWorkStation() -> BOOL;
-        pub fn GetMessageW(lpMsg: *mut MSG, hWnd: HWND, wMsgFilterMin: u32, wMsgFilterMax: u32) -> BOOL;
+        pub fn GetMessageW(
+            lpMsg: *mut MSG,
+            hWnd: HWND,
+            wMsgFilterMin: u32,
+            wMsgFilterMax: u32,
+        ) -> BOOL;
         pub fn TranslateMessage(lpMsg: *const MSG) -> BOOL;
         pub fn DispatchMessageW(lpMsg: *const MSG) -> LRESULT;
         pub fn PostThreadMessageW(idThread: u32, Msg: u32, wParam: WPARAM, lParam: LPARAM) -> BOOL;
@@ -179,7 +191,9 @@ impl InputHookManager {
                 .expect("failed to spawn mouse hook thread");
         }
 
-        Self { command_rx: Some(rx) }
+        Self {
+            command_rx: Some(rx),
+        }
     }
 
     /// Takes ownership of the hook command receiver for background processing.
@@ -275,7 +289,12 @@ unsafe extern "system" fn low_level_mouse_proc(
                     match action {
                         ButtonAction::Default => {
                             // Let Windows handle normally
-                            return win32::CallNextHookEx(std::ptr::null_mut(), n_code, w_param, l_param);
+                            return win32::CallNextHookEx(
+                                std::ptr::null_mut(),
+                                n_code,
+                                w_param,
+                                l_param,
+                            );
                         }
                         ButtonAction::Disabled => {
                             // Eat the event completely
@@ -343,7 +362,12 @@ fn execute_action(action: &ButtonAction) {
             };
             unsafe {
                 win32::keybd_event(vk, 0, win32::KEYEVENTF_EXTENDEDKEY, 0);
-                win32::keybd_event(vk, 0, win32::KEYEVENTF_EXTENDEDKEY | win32::KEYEVENTF_KEYUP, 0);
+                win32::keybd_event(
+                    vk,
+                    0,
+                    win32::KEYEVENTF_EXTENDEDKEY | win32::KEYEVENTF_KEYUP,
+                    0,
+                );
             }
         }
         ButtonAction::WindowsShortcut(ws) => match ws {

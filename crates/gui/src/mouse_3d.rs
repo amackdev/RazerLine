@@ -84,7 +84,11 @@ impl Mouse3dView {
         painter.text(
             rect.left_top() + egui::vec2(18.0, 18.0),
             egui::Align2::LEFT_TOP,
-            format!("HARDWARE SCHEMATIC: {} ({})", device_name.to_uppercase(), chassis.display_name()),
+            format!(
+                "HARDWARE SCHEMATIC: {} ({})",
+                device_name.to_uppercase(),
+                chassis.display_name()
+            ),
             egui::FontId::proportional(11.0),
             theme::ACCENT,
         );
@@ -96,9 +100,14 @@ impl Mouse3dView {
                 MouseViewMode::TopDown => {
                     self.render_basilisk_top_view(ui, &painter, center, selected_button, rgb, time)
                 }
-                MouseViewMode::BottomView => {
-                    self.render_basilisk_bottom_view(ui, &painter, center, selected_button, rgb, time)
-                }
+                MouseViewMode::BottomView => self.render_basilisk_bottom_view(
+                    ui,
+                    &painter,
+                    center,
+                    selected_button,
+                    rgb,
+                    time,
+                ),
             },
             DeviceChassis::GenericErgonomic => {
                 self.render_generic_view(ui, &painter, center, selected_button, rgb, time)
@@ -167,7 +176,9 @@ impl Mouse3dView {
         // Instructions footer
         let footer_text = match self.view_mode {
             MouseViewMode::TopDown => "Top Blueprint — click any numbered pin to reassign",
-            MouseViewMode::BottomView => "Bottom Blueprint — Profile Switch button & Focus+ optical sensor",
+            MouseViewMode::BottomView => {
+                "Bottom Blueprint — Profile Switch button & Focus+ optical sensor"
+            }
         };
         painter.text(
             rect.left_bottom() + egui::vec2(18.0, -16.0),
@@ -224,18 +235,72 @@ impl Mouse3dView {
 
         // 4. Interactive Callout Pins with Leader Lines (Official Razer Layout)
         let pins = [
-            (MouseButtonId::MiddleClick, wheel_center, center + egui::vec2(-198.0, -90.0), "Scroll Click"),
-            (MouseButtonId::TiltLeft, wheel_center + egui::vec2(-14.0, 0.0), center + egui::vec2(-198.0, -48.0), "Repeat Scroll Left"),
-            (MouseButtonId::MultiFunctionClutch, center + egui::vec2(-82.0, -15.0), center + egui::vec2(-198.0, -6.0), "Sensitivity Clutch"),
-            (MouseButtonId::SideForward, center + egui::vec2(-56.0, -32.0), center + egui::vec2(-198.0, 36.0), "Mouse Button 5"),
-            (MouseButtonId::SideBack, center + egui::vec2(-54.0, 2.0), center + egui::vec2(-198.0, 78.0), "Mouse Button 4"),
-            (MouseButtonId::ProfileSwitch, center + egui::vec2(-14.0, 140.0), center + egui::vec2(-198.0, 120.0), "Cycle Up Profile"),
-
-            (MouseButtonId::ScrollUp, wheel_center + egui::vec2(0.0, -12.0), center + egui::vec2(198.0, -90.0), "Scroll Up"),
-            (MouseButtonId::TiltRight, wheel_center + egui::vec2(14.0, 0.0), center + egui::vec2(198.0, -48.0), "Repeat Scroll Right"),
-            (MouseButtonId::ScrollDown, wheel_center + egui::vec2(0.0, 12.0), center + egui::vec2(198.0, -6.0), "Scroll Down"),
-            (MouseButtonId::ScrollMode, center + egui::vec2(0.0, -64.0), center + egui::vec2(198.0, 36.0), "Scroll Mode Toggle"),
-            (MouseButtonId::DpiSwitch, center + egui::vec2(0.0, -44.0), center + egui::vec2(198.0, 78.0), "Cycle Up Sensitivity Stages"),
+            (
+                MouseButtonId::MiddleClick,
+                wheel_center,
+                center + egui::vec2(-198.0, -90.0),
+                "Scroll Click",
+            ),
+            (
+                MouseButtonId::TiltLeft,
+                wheel_center + egui::vec2(-14.0, 0.0),
+                center + egui::vec2(-198.0, -48.0),
+                "Repeat Scroll Left",
+            ),
+            (
+                MouseButtonId::MultiFunctionClutch,
+                center + egui::vec2(-82.0, -15.0),
+                center + egui::vec2(-198.0, -6.0),
+                "Sensitivity Clutch",
+            ),
+            (
+                MouseButtonId::SideForward,
+                center + egui::vec2(-56.0, -32.0),
+                center + egui::vec2(-198.0, 36.0),
+                "Mouse Button 5",
+            ),
+            (
+                MouseButtonId::SideBack,
+                center + egui::vec2(-54.0, 2.0),
+                center + egui::vec2(-198.0, 78.0),
+                "Mouse Button 4",
+            ),
+            (
+                MouseButtonId::ProfileSwitch,
+                center + egui::vec2(-14.0, 140.0),
+                center + egui::vec2(-198.0, 120.0),
+                "Cycle Up Profile",
+            ),
+            (
+                MouseButtonId::ScrollUp,
+                wheel_center + egui::vec2(0.0, -12.0),
+                center + egui::vec2(198.0, -90.0),
+                "Scroll Up",
+            ),
+            (
+                MouseButtonId::TiltRight,
+                wheel_center + egui::vec2(14.0, 0.0),
+                center + egui::vec2(198.0, -48.0),
+                "Repeat Scroll Right",
+            ),
+            (
+                MouseButtonId::ScrollDown,
+                wheel_center + egui::vec2(0.0, 12.0),
+                center + egui::vec2(198.0, -6.0),
+                "Scroll Down",
+            ),
+            (
+                MouseButtonId::ScrollMode,
+                center + egui::vec2(0.0, -64.0),
+                center + egui::vec2(198.0, 36.0),
+                "Scroll Mode Toggle",
+            ),
+            (
+                MouseButtonId::DpiSwitch,
+                center + egui::vec2(0.0, -44.0),
+                center + egui::vec2(198.0, 78.0),
+                "Cycle Up Sensitivity Stages",
+            ),
         ];
 
         for (btn_id, target_pos, badge_pos, text) in pins {
@@ -282,7 +347,10 @@ impl Mouse3dView {
         painter.circle_stroke(
             profile_led_pos,
             7.5_f32,
-            Stroke::new(1.5_f32, Color32::from_rgba_unmultiplied(led_color.r(), led_color.g(), led_color.b(), 110)),
+            Stroke::new(
+                1.5_f32,
+                Color32::from_rgba_unmultiplied(led_color.r(), led_color.g(), led_color.b(), 110),
+            ),
         );
         painter.circle_filled(profile_led_pos, 1.8_f32, Color32::WHITE);
 
@@ -350,10 +418,30 @@ impl Mouse3dView {
 
         // Standard Generic Pins
         let pins = [
-            (MouseButtonId::MiddleClick, center + egui::vec2(0.0, -95.0), center + egui::vec2(-185.0, -50.0), "3: Scroll Click"),
-            (MouseButtonId::SideForward, center + egui::vec2(-55.0, -20.0), center + egui::vec2(-185.0, 10.0), "5: Forward (M5)"),
-            (MouseButtonId::SideBack, center + egui::vec2(-52.0, 15.0), center + egui::vec2(-185.0, 70.0), "4: Back (M4)"),
-            (MouseButtonId::DpiSwitch, center + egui::vec2(0.0, -45.0), center + egui::vec2(185.0, -20.0), "DPI Cycle Button"),
+            (
+                MouseButtonId::MiddleClick,
+                center + egui::vec2(0.0, -95.0),
+                center + egui::vec2(-185.0, -50.0),
+                "3: Scroll Click",
+            ),
+            (
+                MouseButtonId::SideForward,
+                center + egui::vec2(-55.0, -20.0),
+                center + egui::vec2(-185.0, 10.0),
+                "5: Forward (M5)",
+            ),
+            (
+                MouseButtonId::SideBack,
+                center + egui::vec2(-52.0, 15.0),
+                center + egui::vec2(-185.0, 70.0),
+                "4: Back (M4)",
+            ),
+            (
+                MouseButtonId::DpiSwitch,
+                center + egui::vec2(0.0, -45.0),
+                center + egui::vec2(185.0, -20.0),
+                "DPI Cycle Button",
+            ),
         ];
 
         for (btn_id, target_pos, badge_pos, text) in pins {
@@ -400,7 +488,11 @@ impl Mouse3dView {
         // Leader line with orthogonal knee joints connecting cleanly to the nearest badge edge
         let is_left = badge_pos.x < target_pos.x;
         let connect_pos = Pos2::new(
-            if is_left { badge_rect.max.x } else { badge_rect.min.x },
+            if is_left {
+                badge_rect.max.x
+            } else {
+                badge_rect.min.x
+            },
             badge_rect.center().y,
         );
 
@@ -427,12 +519,20 @@ impl Mouse3dView {
             );
         } else {
             painter.circle_filled(target_pos, 3.5_f32, stroke_color);
-            painter.circle_stroke(target_pos, 5.5_f32, Stroke::new(1.0_f32, Color32::from_white_alpha(35)));
+            painter.circle_stroke(
+                target_pos,
+                5.5_f32,
+                Stroke::new(1.0_f32, Color32::from_white_alpha(35)),
+            );
         }
 
         // Badge pill box
         painter.rect_filled(badge_rect, 6.0_f32, bg_color);
-        painter.rect_stroke(badge_rect, 6.0_f32, Stroke::new(if is_selected { 1.5_f32 } else { 1.0_f32 }, stroke_color));
+        painter.rect_stroke(
+            badge_rect,
+            6.0_f32,
+            Stroke::new(if is_selected { 1.5_f32 } else { 1.0_f32 }, stroke_color),
+        );
 
         let text_color = if is_selected {
             theme::ACCENT
@@ -469,7 +569,11 @@ impl Mouse3dView {
 
         let is_left = badge_pos.x < target_pos.x;
         let connect_pos = Pos2::new(
-            if is_left { badge_rect.max.x } else { badge_rect.min.x },
+            if is_left {
+                badge_rect.max.x
+            } else {
+                badge_rect.min.x
+            },
             badge_rect.center().y,
         );
 

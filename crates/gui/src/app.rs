@@ -116,7 +116,8 @@ fn spawn_background_worker(state: DpiRuntimeState, rx: Receiver<HookCommand>) {
                         HookCommand::CycleDpi => {
                             let stages = state.dpi_stages.read().unwrap().clone();
                             if !stages.is_empty() {
-                                let cur = state.current_stage_idx.load(Ordering::SeqCst) % stages.len();
+                                let cur =
+                                    state.current_stage_idx.load(Ordering::SeqCst) % stages.len();
                                 let next = (cur + 1) % stages.len();
                                 let target_dpi = stages[next];
                                 if let Some(dev) = state.device.lock().unwrap().as_ref() {
@@ -224,8 +225,11 @@ fn spawn_background_worker(state: DpiRuntimeState, rx: Receiver<HookCommand>) {
                                     let user_prof = prof_cfg.active_profile().clone();
 
                                     *state.active_profile_id.write().unwrap() = Some(next_id);
-                                    *state.dpi_stages.write().unwrap() = user_prof.dpi_stages.clone();
-                                    state.current_stage_idx.store(user_prof.current_stage_idx, Ordering::SeqCst);
+                                    *state.dpi_stages.write().unwrap() =
+                                        user_prof.dpi_stages.clone();
+                                    state
+                                        .current_stage_idx
+                                        .store(user_prof.current_stage_idx, Ordering::SeqCst);
                                     state.current_dpi.store(user_prof.dpi, Ordering::SeqCst);
 
                                     if let Some(dev) = state.device.lock().unwrap().as_ref() {
@@ -234,11 +238,14 @@ fn spawn_background_worker(state: DpiRuntimeState, rx: Receiver<HookCommand>) {
                                             let _ = dev.set_poll_rate(hz);
                                         }
                                         for zone in dev.profile.leds {
-                                            let _ = dev.set_led_brightness(zone, user_prof.brightness);
+                                            let _ =
+                                                dev.set_led_brightness(zone, user_prof.brightness);
                                         }
                                     }
 
-                                    crate::input_hook::update_active_mappings(user_prof.button_mappings.clone());
+                                    crate::input_hook::update_active_mappings(
+                                        user_prof.button_mappings.clone(),
+                                    );
                                     crate::osd::show_dpi(user_prof.dpi);
                                     let _ = cfg.save();
                                 }
@@ -253,7 +260,9 @@ fn spawn_background_worker(state: DpiRuntimeState, rx: Receiver<HookCommand>) {
                                 if hw_dpi.x > 0 && hw_dpi.x != cur {
                                     let stages = state.dpi_stages.read().unwrap().clone();
                                     if !stages.is_empty() {
-                                        let cur_idx = state.current_stage_idx.load(Ordering::SeqCst) % stages.len();
+                                        let cur_idx =
+                                            state.current_stage_idx.load(Ordering::SeqCst)
+                                                % stages.len();
                                         let next_idx = (cur_idx + 1) % stages.len();
                                         let target_dpi = stages[next_idx];
 
@@ -267,7 +276,8 @@ fn spawn_background_worker(state: DpiRuntimeState, rx: Receiver<HookCommand>) {
                                         if pid > 0 {
                                             let mut cfg = AppConfig::load();
                                             let dev_entry = cfg.devices.entry(pid).or_default();
-                                            let prof = dev_entry.ensure_profiles().active_profile_mut();
+                                            let prof =
+                                                dev_entry.ensure_profiles().active_profile_mut();
                                             prof.current_stage_idx = next_idx;
                                             prof.dpi = target_dpi;
                                             let _ = cfg.save();
@@ -386,7 +396,12 @@ impl GuiApp {
     }
 
     pub fn active_device_profile(&self) -> Option<&'static DeviceProfile> {
-        self.runtime_state.device.lock().unwrap().as_ref().map(|d| d.profile)
+        self.runtime_state
+            .device
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|d| d.profile)
     }
 
     pub fn has_device(&self) -> bool {
@@ -436,14 +451,22 @@ impl GuiApp {
                 let active_prof = prof_cfg.active_profile().clone();
 
                 *self.runtime_state.device.lock().unwrap() = Some(dev);
-                self.runtime_state.active_pid.store(pid as u32, Ordering::SeqCst);
-                self.runtime_state.current_dpi.store(active_prof.dpi, Ordering::SeqCst);
+                self.runtime_state
+                    .active_pid
+                    .store(pid as u32, Ordering::SeqCst);
+                self.runtime_state
+                    .current_dpi
+                    .store(active_prof.dpi, Ordering::SeqCst);
                 *self.runtime_state.dpi_stages.write().unwrap() = active_prof.dpi_stages.clone();
-                self.runtime_state.current_stage_idx.store(active_prof.current_stage_idx, Ordering::SeqCst);
-                *self.runtime_state.active_profile_id.write().unwrap() = Some(active_prof.id.clone());
+                self.runtime_state
+                    .current_stage_idx
+                    .store(active_prof.current_stage_idx, Ordering::SeqCst);
+                *self.runtime_state.active_profile_id.write().unwrap() =
+                    Some(active_prof.id.clone());
 
                 // Update input hook mappings with active profile mappings
-                self.input_hook.update_mappings(active_prof.button_mappings.clone());
+                self.input_hook
+                    .update_mappings(active_prof.button_mappings.clone());
                 crate::input_hook::update_active_mappings(active_prof.button_mappings.clone());
 
                 // Apply active profile
@@ -471,9 +494,13 @@ impl GuiApp {
         self.dpi_y = user_prof.dpi;
         self.custom_dpi_input = user_prof.dpi as u32;
 
-        self.runtime_state.current_dpi.store(user_prof.dpi, Ordering::SeqCst);
+        self.runtime_state
+            .current_dpi
+            .store(user_prof.dpi, Ordering::SeqCst);
         *self.runtime_state.dpi_stages.write().unwrap() = user_prof.dpi_stages.clone();
-        self.runtime_state.current_stage_idx.store(user_prof.current_stage_idx, Ordering::SeqCst);
+        self.runtime_state
+            .current_stage_idx
+            .store(user_prof.current_stage_idx, Ordering::SeqCst);
 
         let mut set_poll = None;
         {
@@ -579,7 +606,8 @@ impl GuiApp {
         }
 
         // 4. Button remapping hook table
-        self.input_hook.update_mappings(user_prof.button_mappings.clone());
+        self.input_hook
+            .update_mappings(user_prof.button_mappings.clone());
 
         let msg = if applied.is_empty() {
             format!("Loaded profile: {}", user_prof.name)
@@ -603,15 +631,14 @@ impl GuiApp {
 
             *self.runtime_state.active_profile_id.write().unwrap() = Some(profile_id.to_string());
             *self.runtime_state.dpi_stages.write().unwrap() = user_prof.dpi_stages.clone();
-            self.runtime_state.current_stage_idx.store(user_prof.current_stage_idx, Ordering::SeqCst);
-            self.runtime_state.current_dpi.store(user_prof.dpi, Ordering::SeqCst);
+            self.runtime_state
+                .current_stage_idx
+                .store(user_prof.current_stage_idx, Ordering::SeqCst);
+            self.runtime_state
+                .current_dpi
+                .store(user_prof.dpi, Ordering::SeqCst);
 
-            if let Some(profile) = self
-                .connected
-                .iter()
-                .find(|p| p.product_id == pid)
-                .copied()
-            {
+            if let Some(profile) = self.connected.iter().find(|p| p.product_id == pid).copied() {
                 let old_dpi = self.dpi_x;
                 self.apply_user_profile(&user_prof, profile);
                 if old_dpi != user_prof.dpi {
@@ -644,15 +671,7 @@ impl GuiApp {
             };
 
             self.config.update_device(
-                pid,
-                name,
-                dpi,
-                poll,
-                brightness,
-                color,
-                sync,
-                effect,
-                matrix,
+                pid, name, dpi, poll, brightness, color, sync, effect, matrix,
             );
             let _ = self.config.save();
         }
@@ -673,9 +692,15 @@ impl GuiApp {
                 prof.dpi = bg_dpi;
                 prof.current_stage_idx = bg_stage;
                 if let Some(pos) = prof.dpi_stages.iter().position(|&s| s == bg_dpi) {
-                    self.set_status(format!("DPI switched: {} DPI (Stage {})", bg_dpi, pos + 1), false);
+                    self.set_status(
+                        format!("DPI switched: {} DPI (Stage {})", bg_dpi, pos + 1),
+                        false,
+                    );
                 } else {
-                    self.set_status(format!("DPI switched: {} -> {} DPI", old_dpi, bg_dpi), false);
+                    self.set_status(
+                        format!("DPI switched: {} -> {} DPI", old_dpi, bg_dpi),
+                        false,
+                    );
                 }
             }
         }
@@ -713,17 +738,26 @@ impl GuiApp {
         self.dpi_y = target_dpi;
         self.custom_dpi_input = target_dpi as u32;
 
-        self.runtime_state.current_stage_idx.store(next_idx, Ordering::SeqCst);
-        self.runtime_state.current_dpi.store(target_dpi, Ordering::SeqCst);
+        self.runtime_state
+            .current_stage_idx
+            .store(next_idx, Ordering::SeqCst);
+        self.runtime_state
+            .current_dpi
+            .store(target_dpi, Ordering::SeqCst);
 
         crate::osd::show_dpi(target_dpi);
 
         let r = {
             let dev_guard = self.runtime_state.device.lock().unwrap();
-            let Some(dev) = dev_guard.as_ref() else { return };
+            let Some(dev) = dev_guard.as_ref() else {
+                return;
+            };
             dev.set_dpi(target_dpi, target_dpi)
         };
-        self.apply(r, &format!("Switched to DPI Stage {}: {} DPI", next_idx + 1, target_dpi));
+        self.apply(
+            r,
+            &format!("Switched to DPI Stage {}: {} DPI", next_idx + 1, target_dpi),
+        );
         let _ = self.config.save();
     }
 
@@ -747,17 +781,30 @@ impl GuiApp {
         self.dpi_y = target_dpi;
         self.custom_dpi_input = target_dpi as u32;
 
-        self.runtime_state.current_stage_idx.store(stage_idx, Ordering::SeqCst);
-        self.runtime_state.current_dpi.store(target_dpi, Ordering::SeqCst);
+        self.runtime_state
+            .current_stage_idx
+            .store(stage_idx, Ordering::SeqCst);
+        self.runtime_state
+            .current_dpi
+            .store(target_dpi, Ordering::SeqCst);
 
         crate::osd::show_dpi(target_dpi);
 
         let r = {
             let dev_guard = self.runtime_state.device.lock().unwrap();
-            let Some(dev) = dev_guard.as_ref() else { return };
+            let Some(dev) = dev_guard.as_ref() else {
+                return;
+            };
             dev.set_dpi(target_dpi, target_dpi)
         };
-        self.apply(r, &format!("Switched to DPI Stage {}: {} DPI", stage_idx + 1, target_dpi));
+        self.apply(
+            r,
+            &format!(
+                "Switched to DPI Stage {}: {} DPI",
+                stage_idx + 1,
+                target_dpi
+            ),
+        );
         let _ = self.config.save();
     }
 
@@ -769,7 +816,9 @@ impl GuiApp {
         self.dpi_y = target_dpi;
         self.custom_dpi_input = target_dpi as u32;
 
-        self.runtime_state.current_dpi.store(target_dpi, Ordering::SeqCst);
+        self.runtime_state
+            .current_dpi
+            .store(target_dpi, Ordering::SeqCst);
 
         crate::osd::show_dpi(target_dpi);
 
@@ -779,13 +828,17 @@ impl GuiApp {
             prof.dpi = target_dpi;
             if let Some(pos) = prof.dpi_stages.iter().position(|&s| s == target_dpi) {
                 prof.current_stage_idx = pos;
-                self.runtime_state.current_stage_idx.store(pos, Ordering::SeqCst);
+                self.runtime_state
+                    .current_stage_idx
+                    .store(pos, Ordering::SeqCst);
             }
         }
 
         let r = {
             let dev_guard = self.runtime_state.device.lock().unwrap();
-            let Some(dev) = dev_guard.as_ref() else { return };
+            let Some(dev) = dev_guard.as_ref() else {
+                return;
+            };
             dev.set_dpi(target_dpi, target_dpi)
         };
         self.apply(r, &format!("DPI set to {} DPI", target_dpi));
@@ -814,16 +867,26 @@ impl GuiApp {
             self.dpi_x = new_dpi;
             self.dpi_y = new_dpi;
             self.custom_dpi_input = new_dpi as u32;
-            self.runtime_state.current_dpi.store(new_dpi, Ordering::SeqCst);
+            self.runtime_state
+                .current_dpi
+                .store(new_dpi, Ordering::SeqCst);
             let r = {
                 let dev_guard = self.runtime_state.device.lock().unwrap();
-                let Some(dev) = dev_guard.as_ref() else { return };
+                let Some(dev) = dev_guard.as_ref() else {
+                    return;
+                };
                 dev.set_dpi(new_dpi, new_dpi)
             };
             crate::osd::show_dpi(new_dpi);
-            self.apply(r, &format!("Stage {} DPI updated to {} DPI", stage_idx + 1, new_dpi));
+            self.apply(
+                r,
+                &format!("Stage {} DPI updated to {} DPI", stage_idx + 1, new_dpi),
+            );
         } else {
-            self.set_status(format!("Stage {} DPI set to {} DPI", stage_idx + 1, new_dpi), false);
+            self.set_status(
+                format!("Stage {} DPI set to {} DPI", stage_idx + 1, new_dpi),
+                false,
+            );
         }
     }
 
@@ -843,14 +906,20 @@ impl GuiApp {
         self.custom_dpi_input = new_dpi as u32;
 
         *self.runtime_state.dpi_stages.write().unwrap() = new_stages;
-        self.runtime_state.current_stage_idx.store(new_idx, Ordering::SeqCst);
-        self.runtime_state.current_dpi.store(new_dpi, Ordering::SeqCst);
+        self.runtime_state
+            .current_stage_idx
+            .store(new_idx, Ordering::SeqCst);
+        self.runtime_state
+            .current_dpi
+            .store(new_dpi, Ordering::SeqCst);
 
         let _ = self.config.save();
 
         let r = {
             let dev_guard = self.runtime_state.device.lock().unwrap();
-            let Some(dev) = dev_guard.as_ref() else { return };
+            let Some(dev) = dev_guard.as_ref() else {
+                return;
+            };
             dev.set_dpi(new_dpi, new_dpi)
         };
         crate::osd::show_dpi(new_dpi);
@@ -889,18 +958,31 @@ impl GuiApp {
         self.custom_dpi_input = new_dpi as u32;
 
         *self.runtime_state.dpi_stages.write().unwrap() = new_stages;
-        self.runtime_state.current_stage_idx.store(new_idx, Ordering::SeqCst);
-        self.runtime_state.current_dpi.store(new_dpi, Ordering::SeqCst);
+        self.runtime_state
+            .current_stage_idx
+            .store(new_idx, Ordering::SeqCst);
+        self.runtime_state
+            .current_dpi
+            .store(new_dpi, Ordering::SeqCst);
 
         let _ = self.config.save();
 
         let r = {
             let dev_guard = self.runtime_state.device.lock().unwrap();
-            let Some(dev) = dev_guard.as_ref() else { return };
+            let Some(dev) = dev_guard.as_ref() else {
+                return;
+            };
             dev.set_dpi(new_dpi, new_dpi)
         };
         crate::osd::show_dpi(new_dpi);
-        self.apply(r, &format!("Stage removed. Active: Stage {}: {} DPI", new_idx + 1, new_dpi));
+        self.apply(
+            r,
+            &format!(
+                "Stage removed. Active: Stage {}: {} DPI",
+                new_idx + 1,
+                new_dpi
+            ),
+        );
     }
 
     /// Sorts all DPI stages from lowest to highest.
@@ -911,7 +993,9 @@ impl GuiApp {
         prof.sort_stages();
 
         *self.runtime_state.dpi_stages.write().unwrap() = prof.dpi_stages.clone();
-        self.runtime_state.current_stage_idx.store(prof.current_stage_idx, Ordering::SeqCst);
+        self.runtime_state
+            .current_stage_idx
+            .store(prof.current_stage_idx, Ordering::SeqCst);
         let _ = self.config.save();
         self.set_status("Sorted DPI stages from low to high", false);
     }
@@ -930,18 +1014,25 @@ impl GuiApp {
         self.custom_dpi_input = 1600;
 
         *self.runtime_state.dpi_stages.write().unwrap() = prof.dpi_stages.clone();
-        self.runtime_state.current_stage_idx.store(2, Ordering::SeqCst);
+        self.runtime_state
+            .current_stage_idx
+            .store(2, Ordering::SeqCst);
         self.runtime_state.current_dpi.store(1600, Ordering::SeqCst);
 
         let _ = self.config.save();
 
         let r = {
             let dev_guard = self.runtime_state.device.lock().unwrap();
-            let Some(dev) = dev_guard.as_ref() else { return };
+            let Some(dev) = dev_guard.as_ref() else {
+                return;
+            };
             dev.set_dpi(1600, 1600)
         };
         crate::osd::show_dpi(1600);
-        self.apply(r, "Reset DPI stages to defaults (400, 800, 1600, 3200, 6400)");
+        self.apply(
+            r,
+            "Reset DPI stages to defaults (400, 800, 1600, 3200, 6400)",
+        );
     }
 
     /// Cycles the active profile (triggered by profile switch button).
@@ -993,7 +1084,9 @@ impl GuiApp {
         let mut failure = None;
         {
             let dev_guard = self.runtime_state.device.lock().unwrap();
-            let Some(dev) = dev_guard.as_ref() else { return };
+            let Some(dev) = dev_guard.as_ref() else {
+                return;
+            };
             for (i, zone) in targets.iter().enumerate() {
                 if i > 0 {
                     sleep(INTER_ZONE_DELAY);
@@ -1028,7 +1121,9 @@ impl GuiApp {
         let mut failure = None;
         {
             let dev_guard = self.runtime_state.device.lock().unwrap();
-            let Some(dev) = dev_guard.as_ref() else { return };
+            let Some(dev) = dev_guard.as_ref() else {
+                return;
+            };
             for (i, zone) in targets.iter().enumerate() {
                 if i > 0 {
                     sleep(INTER_ZONE_DELAY);
@@ -1064,11 +1159,9 @@ impl Default for GuiApp {
 impl eframe::App for GuiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Window close interception: if close_to_tray is true, hide to tray instead of quitting
-        if ctx.input(|i| i.viewport().close_requested()) {
-            if self.config.close_to_tray {
-                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-                crate::win_util::hide_window();
-            }
+        if ctx.input(|i| i.viewport().close_requested()) && self.config.close_to_tray {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            crate::win_util::hide_window();
         }
 
         // Live USB detection: re-scan periodically
@@ -1128,7 +1221,9 @@ impl eframe::App for GuiApp {
 
 fn ui_nav_tab(ui: &mut egui::Ui, label: &str, is_active: bool) -> bool {
     let font_id = egui::FontId::proportional(12.5);
-    let galley = ui.painter().layout_no_wrap(label.to_string(), font_id.clone(), Color32::WHITE);
+    let galley = ui
+        .painter()
+        .layout_no_wrap(label.to_string(), font_id.clone(), Color32::WHITE);
     let text_size = galley.size();
     let pad_x = 16.0;
     let tab_size = egui::vec2(text_size.x + pad_x * 2.0, 36.0);
@@ -1148,13 +1243,8 @@ fn ui_nav_tab(ui: &mut egui::Ui, label: &str, is_active: bool) -> bool {
         rect.min.x + pad_x,
         rect.center().y - text_size.y * 0.5 - 1.0,
     );
-    ui.painter().text(
-        text_pos,
-        egui::Align2::LEFT_TOP,
-        label,
-        font_id,
-        text_color,
-    );
+    ui.painter()
+        .text(text_pos, egui::Align2::LEFT_TOP, label, font_id, text_color);
 
     if is_active {
         let bar_rect = egui::Rect::from_min_max(
@@ -1167,7 +1257,8 @@ fn ui_nav_tab(ui: &mut egui::Ui, label: &str, is_active: bool) -> bool {
             egui::pos2(rect.min.x + 12.0, rect.max.y - 2.0),
             egui::pos2(rect.max.x - 12.0, rect.max.y),
         );
-        ui.painter().rect_filled(bar_rect, 1.0, Color32::from_white_alpha(50));
+        ui.painter()
+            .rect_filled(bar_rect, 1.0, Color32::from_white_alpha(50));
     }
 
     response.clicked()
@@ -1236,11 +1327,8 @@ impl GuiApp {
                     }
 
                     // Connected Device Name
-                    if let Some(profile) = self
-                        .connected
-                        .iter()
-                        .find(|p| p.product_id == pid)
-                        .copied()
+                    if let Some(profile) =
+                        self.connected.iter().find(|p| p.product_id == pid).copied()
                     {
                         ui.label(
                             egui::RichText::new(profile.name)
@@ -1249,11 +1337,7 @@ impl GuiApp {
                         );
                     }
                 } else {
-                    ui.label(
-                        egui::RichText::new("No Device")
-                            .small()
-                            .color(theme::MUTED),
-                    );
+                    ui.label(egui::RichText::new("No Device").small().color(theme::MUTED));
                 }
             });
         });
@@ -1398,193 +1482,247 @@ impl GuiApp {
         let mut trigger_dpi_cycle = false;
         let mut trigger_profile_cycle = false;
 
-        widgets::card(ui, &format!("Configuring: {}", btn_id.display_name()), |ui| {
-            let pid = match self.active_pid {
-                Some(pid) => pid,
-                None => return,
-            };
+        widgets::card(
+            ui,
+            &format!("Configuring: {}", btn_id.display_name()),
+            |ui| {
+                let pid = match self.active_pid {
+                    Some(pid) => pid,
+                    None => return,
+                };
 
-            let dev_entry = self.config.devices.entry(pid).or_default();
-            let prof = dev_entry.ensure_profiles().active_profile_mut();
-            let current_action = prof.get_button_action(btn_id);
+                let dev_entry = self.config.devices.entry(pid).or_default();
+                let prof = dev_entry.ensure_profiles().active_profile_mut();
+                let current_action = prof.get_button_action(btn_id);
 
-            // Target Button selector ComboBox
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("Target Button:").small().color(theme::MUTED));
-                egui::ComboBox::from_id_source("inspector_target_btn_combo")
-                    .selected_text(btn_id.display_name())
-                    .show_ui(ui, |ui| {
-                        for b in MouseButtonId::CONFIGURABLE {
-                            let is_sel = self.selected_button == Some(b);
-                            if ui.selectable_label(is_sel, b.display_name()).clicked() {
-                                self.selected_button = Some(b);
+                // Target Button selector ComboBox
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new("Target Button:")
+                            .small()
+                            .color(theme::MUTED),
+                    );
+                    egui::ComboBox::from_id_source("inspector_target_btn_combo")
+                        .selected_text(btn_id.display_name())
+                        .show_ui(ui, |ui| {
+                            for b in MouseButtonId::CONFIGURABLE {
+                                let is_sel = self.selected_button == Some(b);
+                                if ui.selectable_label(is_sel, b.display_name()).clicked() {
+                                    self.selected_button = Some(b);
+                                }
                             }
-                        }
-                    });
-            });
-            ui.add_space(8.0);
-
-            ui.label(
-                egui::RichText::new(format!("Current assignment: {}", current_action.label()))
-                    .strong()
-                    .color(theme::ACCENT),
-            );
-            ui.add_space(8.0);
-
-            // Immediate Trigger Action button if inspecting DPI Switch or Profile Switch
-            if btn_id == MouseButtonId::DpiSwitch || matches!(current_action, ButtonAction::Sensitivity(SensitivityAction::CycleDpi)) {
-                if ui.button("Test / Cycle DPI Now (Hardware)").clicked() {
-                    trigger_dpi_cycle = true;
-                }
+                        });
+                });
                 ui.add_space(8.0);
-            } else if btn_id == MouseButtonId::ProfileSwitch || matches!(current_action, ButtonAction::ProfileCycle) {
-                if ui.button("Test / Cycle Profile Now").clicked() {
-                    trigger_profile_cycle = true;
-                }
-                ui.add_space(8.0);
-            }
 
-            ui.label(egui::RichText::new("REMAP ACTION CATEGORY").small().color(theme::MUTED));
-            ui.add_space(6.0);
-
-            let mut new_action = None;
-
-            // Option 1: Default
-            if ui.button("Restore Default Function").clicked() {
-                new_action = Some(btn_id.default_action());
-            }
-
-            ui.add_space(8.0);
-            ui.separator();
-            ui.add_space(8.0);
-
-            // Option 2: Profile Cycle
-            ui.label(egui::RichText::new("Profile Switching").small().color(theme::MUTED));
-            ui.horizontal_wrapped(|ui| {
-                if ui.button("Switch / Cycle Profile").clicked() {
-                    new_action = Some(ButtonAction::ProfileCycle);
-                }
-            });
-
-            ui.add_space(8.0);
-            ui.separator();
-            ui.add_space(8.0);
-
-            // Option 3: Mouse Functions
-            ui.label(egui::RichText::new("Mouse Clicks & Navigation").small().color(theme::MUTED));
-            ui.horizontal_wrapped(|ui| {
-                let funcs = [
-                    (MouseFunction::LeftClick, "Left Click"),
-                    (MouseFunction::RightClick, "Right Click"),
-                    (MouseFunction::MiddleClick, "Middle Click"),
-                    (MouseFunction::ScrollLeft, "Scroll Left"),
-                    (MouseFunction::ScrollRight, "Scroll Right"),
-                    (MouseFunction::Back, "Back (M4)"),
-                    (MouseFunction::Forward, "Forward (M5)"),
-                    (MouseFunction::DoubleClick, "Double Click"),
-                ];
-                for (mf, label) in funcs {
-                    if ui.button(label).clicked() {
-                        new_action = Some(ButtonAction::Mouse(mf));
-                    }
-                }
-            });
-
-            ui.add_space(8.0);
-            ui.separator();
-            ui.add_space(8.0);
-
-            // Option 4: Sensitivity & DPI
-            ui.label(egui::RichText::new("Sensitivity Controls").small().color(theme::MUTED));
-            ui.horizontal_wrapped(|ui| {
-                if ui.button("DPI Cycle").clicked() {
-                    new_action = Some(ButtonAction::Sensitivity(SensitivityAction::CycleDpi));
-                }
-                if ui.button("DPI Stage Up").clicked() {
-                    new_action = Some(ButtonAction::Sensitivity(SensitivityAction::DpiUp));
-                }
-                if ui.button("DPI Stage Down").clicked() {
-                    new_action = Some(ButtonAction::Sensitivity(SensitivityAction::DpiDown));
-                }
-            });
-
-            ui.horizontal_wrapped(|ui| {
-                ui.label(egui::RichText::new("Sniper Clutch:").small().color(theme::MUTED));
-                for clutch_dpi in [200, 400, 800] {
-                    if ui.button(format!("{clutch_dpi} DPI")).clicked() {
-                        new_action = Some(ButtonAction::Sensitivity(SensitivityAction::SniperClutch { clutch_dpi }));
-                    }
-                }
-            });
-
-            if matches!(current_action, ButtonAction::Sensitivity(SensitivityAction::CycleDpi)) {
-                let stage_seq = prof.dpi_stages.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(" -> ");
                 ui.label(
-                    egui::RichText::new(format!("Configured Sequence: [ {stage_seq} ] DPI"))
-                        .small()
+                    egui::RichText::new(format!("Current assignment: {}", current_action.label()))
+                        .strong()
                         .color(theme::ACCENT),
                 );
-            }
+                ui.add_space(8.0);
 
-            ui.add_space(8.0);
-            ui.separator();
-            ui.add_space(8.0);
-
-            // Option 5: Multimedia
-            ui.label(egui::RichText::new("Media & Audio").small().color(theme::MUTED));
-            ui.horizontal_wrapped(|ui| {
-                let media = [
-                    (MediaAction::PlayPause, "Play/Pause"),
-                    (MediaAction::VolumeUp, "Vol +"),
-                    (MediaAction::VolumeDown, "Vol -"),
-                    (MediaAction::Mute, "Mute"),
-                    (MediaAction::NextTrack, "Next"),
-                    (MediaAction::PrevTrack, "Prev"),
-                ];
-                for (ma, label) in media {
-                    if ui.button(label).clicked() {
-                        new_action = Some(ButtonAction::Multimedia(ma));
+                // Immediate Trigger Action button if inspecting DPI Switch or Profile Switch
+                if btn_id == MouseButtonId::DpiSwitch
+                    || matches!(
+                        current_action,
+                        ButtonAction::Sensitivity(SensitivityAction::CycleDpi)
+                    )
+                {
+                    if ui.button("Test / Cycle DPI Now (Hardware)").clicked() {
+                        trigger_dpi_cycle = true;
                     }
-                }
-            });
-
-            ui.add_space(8.0);
-            ui.separator();
-            ui.add_space(8.0);
-
-            // Option 6: Windows Shortcuts
-            ui.label(egui::RichText::new("Windows Shortcuts").small().color(theme::MUTED));
-            ui.horizontal_wrapped(|ui| {
-                let shortcuts = [
-                    (WinShortcut::LockPc, "Lock PC"),
-                    (WinShortcut::TaskView, "Task View"),
-                    (WinShortcut::ShowDesktop, "Show Desktop"),
-                    (WinShortcut::OpenExplorer, "Explorer"),
-                ];
-                for (ws, label) in shortcuts {
-                    if ui.button(label).clicked() {
-                        new_action = Some(ButtonAction::WindowsShortcut(ws));
+                    ui.add_space(8.0);
+                } else if btn_id == MouseButtonId::ProfileSwitch
+                    || matches!(current_action, ButtonAction::ProfileCycle)
+                {
+                    if ui.button("Test / Cycle Profile Now").clicked() {
+                        trigger_profile_cycle = true;
                     }
+                    ui.add_space(8.0);
                 }
-            });
 
-            ui.add_space(8.0);
-            ui.separator();
-            ui.add_space(8.0);
+                ui.label(
+                    egui::RichText::new("REMAP ACTION CATEGORY")
+                        .small()
+                        .color(theme::MUTED),
+                );
+                ui.add_space(6.0);
 
-            // Option 7: Disable
-            if ui.button("Disable Button").clicked() {
-                new_action = Some(ButtonAction::Disabled);
-            }
+                let mut new_action = None;
 
-            if let Some(action) = new_action {
-                prof.set_button_action(btn_id, action);
-                let actions = prof.button_mappings.clone();
-                let _ = self.config.save();
-                self.input_hook.update_mappings(actions);
-                self.set_status(format!("Updated {}", btn_id.short_name()), false);
-            }
-        });
+                // Option 1: Default
+                if ui.button("Restore Default Function").clicked() {
+                    new_action = Some(btn_id.default_action());
+                }
+
+                ui.add_space(8.0);
+                ui.separator();
+                ui.add_space(8.0);
+
+                // Option 2: Profile Cycle
+                ui.label(
+                    egui::RichText::new("Profile Switching")
+                        .small()
+                        .color(theme::MUTED),
+                );
+                ui.horizontal_wrapped(|ui| {
+                    if ui.button("Switch / Cycle Profile").clicked() {
+                        new_action = Some(ButtonAction::ProfileCycle);
+                    }
+                });
+
+                ui.add_space(8.0);
+                ui.separator();
+                ui.add_space(8.0);
+
+                // Option 3: Mouse Functions
+                ui.label(
+                    egui::RichText::new("Mouse Clicks & Navigation")
+                        .small()
+                        .color(theme::MUTED),
+                );
+                ui.horizontal_wrapped(|ui| {
+                    let funcs = [
+                        (MouseFunction::LeftClick, "Left Click"),
+                        (MouseFunction::RightClick, "Right Click"),
+                        (MouseFunction::MiddleClick, "Middle Click"),
+                        (MouseFunction::ScrollLeft, "Scroll Left"),
+                        (MouseFunction::ScrollRight, "Scroll Right"),
+                        (MouseFunction::Back, "Back (M4)"),
+                        (MouseFunction::Forward, "Forward (M5)"),
+                        (MouseFunction::DoubleClick, "Double Click"),
+                    ];
+                    for (mf, label) in funcs {
+                        if ui.button(label).clicked() {
+                            new_action = Some(ButtonAction::Mouse(mf));
+                        }
+                    }
+                });
+
+                ui.add_space(8.0);
+                ui.separator();
+                ui.add_space(8.0);
+
+                // Option 4: Sensitivity & DPI
+                ui.label(
+                    egui::RichText::new("Sensitivity Controls")
+                        .small()
+                        .color(theme::MUTED),
+                );
+                ui.horizontal_wrapped(|ui| {
+                    if ui.button("DPI Cycle").clicked() {
+                        new_action = Some(ButtonAction::Sensitivity(SensitivityAction::CycleDpi));
+                    }
+                    if ui.button("DPI Stage Up").clicked() {
+                        new_action = Some(ButtonAction::Sensitivity(SensitivityAction::DpiUp));
+                    }
+                    if ui.button("DPI Stage Down").clicked() {
+                        new_action = Some(ButtonAction::Sensitivity(SensitivityAction::DpiDown));
+                    }
+                });
+
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(
+                        egui::RichText::new("Sniper Clutch:")
+                            .small()
+                            .color(theme::MUTED),
+                    );
+                    for clutch_dpi in [200, 400, 800] {
+                        if ui.button(format!("{clutch_dpi} DPI")).clicked() {
+                            new_action =
+                                Some(ButtonAction::Sensitivity(SensitivityAction::SniperClutch {
+                                    clutch_dpi,
+                                }));
+                        }
+                    }
+                });
+
+                if matches!(
+                    current_action,
+                    ButtonAction::Sensitivity(SensitivityAction::CycleDpi)
+                ) {
+                    let stage_seq = prof
+                        .dpi_stages
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect::<Vec<_>>()
+                        .join(" -> ");
+                    ui.label(
+                        egui::RichText::new(format!("Configured Sequence: [ {stage_seq} ] DPI"))
+                            .small()
+                            .color(theme::ACCENT),
+                    );
+                }
+
+                ui.add_space(8.0);
+                ui.separator();
+                ui.add_space(8.0);
+
+                // Option 5: Multimedia
+                ui.label(
+                    egui::RichText::new("Media & Audio")
+                        .small()
+                        .color(theme::MUTED),
+                );
+                ui.horizontal_wrapped(|ui| {
+                    let media = [
+                        (MediaAction::PlayPause, "Play/Pause"),
+                        (MediaAction::VolumeUp, "Vol +"),
+                        (MediaAction::VolumeDown, "Vol -"),
+                        (MediaAction::Mute, "Mute"),
+                        (MediaAction::NextTrack, "Next"),
+                        (MediaAction::PrevTrack, "Prev"),
+                    ];
+                    for (ma, label) in media {
+                        if ui.button(label).clicked() {
+                            new_action = Some(ButtonAction::Multimedia(ma));
+                        }
+                    }
+                });
+
+                ui.add_space(8.0);
+                ui.separator();
+                ui.add_space(8.0);
+
+                // Option 6: Windows Shortcuts
+                ui.label(
+                    egui::RichText::new("Windows Shortcuts")
+                        .small()
+                        .color(theme::MUTED),
+                );
+                ui.horizontal_wrapped(|ui| {
+                    let shortcuts = [
+                        (WinShortcut::LockPc, "Lock PC"),
+                        (WinShortcut::TaskView, "Task View"),
+                        (WinShortcut::ShowDesktop, "Show Desktop"),
+                        (WinShortcut::OpenExplorer, "Explorer"),
+                    ];
+                    for (ws, label) in shortcuts {
+                        if ui.button(label).clicked() {
+                            new_action = Some(ButtonAction::WindowsShortcut(ws));
+                        }
+                    }
+                });
+
+                ui.add_space(8.0);
+                ui.separator();
+                ui.add_space(8.0);
+
+                // Option 7: Disable
+                if ui.button("Disable Button").clicked() {
+                    new_action = Some(ButtonAction::Disabled);
+                }
+
+                if let Some(action) = new_action {
+                    prof.set_button_action(btn_id, action);
+                    let actions = prof.button_mappings.clone();
+                    let _ = self.config.save();
+                    self.input_hook.update_mappings(actions);
+                    self.set_status(format!("Updated {}", btn_id.short_name()), false);
+                }
+            },
+        );
 
         if trigger_dpi_cycle {
             self.cycle_dpi_stage();
@@ -1613,7 +1751,11 @@ impl GuiApp {
 
                 // Number of Stages selector bar (Razer Synapse style: 1 to 5 stages)
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("Number of Stages:").strong().color(Color32::WHITE));
+                    ui.label(
+                        egui::RichText::new("Number of Stages:")
+                            .strong()
+                            .color(Color32::WHITE),
+                    );
                     ui.add_space(8.0);
                     for count in 1..=5 {
                         let is_curr = dpi_stages.len() == count;
@@ -1622,7 +1764,11 @@ impl GuiApp {
                         }
                     }
                     ui.add_space(16.0);
-                    if ui.button("Cycle Next Stage").on_hover_text("Advance hardware DPI to the next configured stage").clicked() {
+                    if ui
+                        .button("Cycle Next Stage")
+                        .on_hover_text("Advance hardware DPI to the next configured stage")
+                        .clicked()
+                    {
                         self.cycle_dpi_stage();
                     }
                 });
@@ -1652,7 +1798,11 @@ impl GuiApp {
                         })
                         .stroke(egui::Stroke::new(
                             if is_active { 1.5_f32 } else { 1.0_f32 },
-                            if is_active { theme::ACCENT } else { Color32::from_rgb(46, 48, 56) },
+                            if is_active {
+                                theme::ACCENT
+                            } else {
+                                Color32::from_rgb(46, 48, 56)
+                            },
                         ))
                         .rounding(8.0)
                         .inner_margin(egui::Margin::symmetric(14.0, 10.0))
@@ -1730,16 +1880,23 @@ impl GuiApp {
 
                                 // Delete Stage Button (if > 1 stage)
                                 if dpi_stages.len() > 1 {
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        let del_btn = egui::Button::new(
-                                            egui::RichText::new("Delete")
-                                                .small()
-                                                .color(Color32::from_rgb(225, 95, 95)),
-                                        );
-                                        if ui.add(del_btn).on_hover_text("Delete this DPI stage").clicked() {
-                                            stage_to_remove = Some(idx);
-                                        }
-                                    });
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            let del_btn = egui::Button::new(
+                                                egui::RichText::new("Delete")
+                                                    .small()
+                                                    .color(Color32::from_rgb(225, 95, 95)),
+                                            );
+                                            if ui
+                                                .add(del_btn)
+                                                .on_hover_text("Delete this DPI stage")
+                                                .clicked()
+                                            {
+                                                stage_to_remove = Some(idx);
+                                            }
+                                        },
+                                    );
                                 }
                             });
                         });
@@ -1765,14 +1922,26 @@ impl GuiApp {
                         let add_btn = egui::Button::new(
                             egui::RichText::new("+ Add Stage").color(theme::ACCENT),
                         );
-                        if ui.add(add_btn).on_hover_text("Add another DPI stage (up to 5 stages)").clicked() {
+                        if ui
+                            .add(add_btn)
+                            .on_hover_text("Add another DPI stage (up to 5 stages)")
+                            .clicked()
+                        {
                             self.add_dpi_stage(dpi.min, dpi.max);
                         }
                     }
-                    if ui.button("Sort Low to High").on_hover_text("Sort stages in ascending order").clicked() {
+                    if ui
+                        .button("Sort Low to High")
+                        .on_hover_text("Sort stages in ascending order")
+                        .clicked()
+                    {
                         self.sort_dpi_stages();
                     }
-                    if ui.button("Reset Defaults (400 - 6400)").on_hover_text("Reset to standard Razer 5-stage defaults").clicked() {
+                    if ui
+                        .button("Reset Defaults (400 - 6400)")
+                        .on_hover_text("Reset to standard Razer 5-stage defaults")
+                        .clicked()
+                    {
                         self.reset_dpi_stages_to_default();
                     }
                 });
@@ -1802,13 +1971,17 @@ impl GuiApp {
                 });
 
                 ui.add_space(10.0);
-                ui.label(egui::RichText::new("Quick Presets").small().color(theme::MUTED));
+                ui.label(
+                    egui::RichText::new("Quick Presets")
+                        .small()
+                        .color(theme::MUTED),
+                );
                 ui.horizontal_wrapped(|ui| {
                     for preset in [400, 800, 1200, 1600, 2400, 3200, 6400, 12000, 16000, 20000] {
                         if preset >= dpi.min && preset <= dpi.max {
-                            let is_curr = self.dpi_x == preset as u16;
+                            let is_curr = self.dpi_x == preset;
                             if ui.selectable_label(is_curr, preset.to_string()).clicked() {
-                                self.apply_dpi_value(preset as u16);
+                                self.apply_dpi_value(preset);
                             }
                         }
                     }
@@ -1821,13 +1994,20 @@ impl GuiApp {
                 ui.horizontal(|ui| {
                     for hz in poll.supported_hz {
                         let is_current = self.current_poll_hz == Some(*hz);
-                        if ui.selectable_label(is_current, format!("{hz} Hz")).clicked() {
+                        if ui
+                            .selectable_label(is_current, format!("{hz} Hz"))
+                            .clicked()
+                        {
                             let result = {
                                 let dev_guard = self.runtime_state.device.lock().unwrap();
                                 dev_guard
                                     .as_ref()
                                     .map(|d| d.set_poll_rate(*hz))
-                                    .unwrap_or_else(|| Err(razer_hid_client::ClientError::Device("no device connected".into())))
+                                    .unwrap_or_else(|| {
+                                        Err(razer_hid_client::ClientError::Device(
+                                            "no device connected".into(),
+                                        ))
+                                    })
                             };
                             if result.is_ok() {
                                 self.current_poll_hz = Some(*hz);
@@ -1885,35 +2065,52 @@ impl GuiApp {
                 let is_active = prof.id == active_id;
 
                 egui::Frame::none()
-                    .fill(if is_active { theme::CARD_BG_HOVER } else { theme::CARD_BG })
+                    .fill(if is_active {
+                        theme::CARD_BG_HOVER
+                    } else {
+                        theme::CARD_BG
+                    })
                     .rounding(8.0)
                     .inner_margin(egui::Margin::symmetric(14.0, 10.0))
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
                             widgets::status_dot(ui, is_active);
+                            ui.label(egui::RichText::new(&prof.name).strong().color(
+                                if is_active {
+                                    theme::ACCENT
+                                } else {
+                                    Color32::WHITE
+                                },
+                            ));
                             ui.label(
-                                egui::RichText::new(&prof.name)
-                                    .strong()
-                                    .color(if is_active { theme::ACCENT } else { Color32::WHITE }),
-                            );
-                            ui.label(
-                                egui::RichText::new(format!("— DPI: {}, {} Hz", prof.dpi, prof.poll_rate_hz.unwrap_or(1000)))
-                                    .small()
-                                    .color(theme::MUTED),
+                                egui::RichText::new(format!(
+                                    "— DPI: {}, {} Hz",
+                                    prof.dpi,
+                                    prof.poll_rate_hz.unwrap_or(1000)
+                                ))
+                                .small()
+                                .color(theme::MUTED),
                             );
 
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if !is_active {
-                                    if ui.button("Activate").clicked() {
-                                        switch_to = Some(prof.id.clone());
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if !is_active {
+                                        if ui.button("Activate").clicked() {
+                                            switch_to = Some(prof.id.clone());
+                                        }
+                                        if ui.button("Delete").clicked() {
+                                            delete_id = Some(prof.id.clone());
+                                        }
+                                    } else {
+                                        ui.label(
+                                            egui::RichText::new("ACTIVE")
+                                                .small()
+                                                .color(theme::ACCENT),
+                                        );
                                     }
-                                    if ui.button("Delete").clicked() {
-                                        delete_id = Some(prof.id.clone());
-                                    }
-                                } else {
-                                    ui.label(egui::RichText::new("ACTIVE").small().color(theme::ACCENT));
-                                }
-                            });
+                                },
+                            );
                         });
                     });
                 ui.add_space(4.0);
@@ -1934,7 +2131,9 @@ impl GuiApp {
             ui.horizontal(|ui| {
                 ui.label("New Profile Name:");
                 ui.text_edit_singleline(&mut self.new_profile_input);
-                if ui.button("Create Profile").clicked() && !self.new_profile_input.trim().is_empty() {
+                if ui.button("Create Profile").clicked()
+                    && !self.new_profile_input.trim().is_empty()
+                {
                     let name = self.new_profile_input.trim().to_string();
                     let new_id = prof_cfg.create_profile(&name);
                     self.new_profile_input.clear();
@@ -1987,16 +2186,14 @@ impl GuiApp {
                 });
                 ui.add_space(6.0);
 
-                if !self.sync_zones {
-                    if zones.len() > 1 {
-                        egui::ComboBox::from_label("Zone")
-                            .selected_text(zones[zone_idx].name)
-                            .show_ui(ui, |ui| {
-                                for (i, z) in zones.iter().enumerate() {
-                                    ui.selectable_value(&mut self.selected_zone_idx, i, z.name);
-                                }
-                            });
-                    }
+                if !self.sync_zones && zones.len() > 1 {
+                    egui::ComboBox::from_label("Zone")
+                        .selected_text(zones[zone_idx].name)
+                        .show_ui(ui, |ui| {
+                            for (i, z) in zones.iter().enumerate() {
+                                ui.selectable_value(&mut self.selected_zone_idx, i, z.name);
+                            }
+                        });
                 }
             }
 
@@ -2133,7 +2330,10 @@ impl GuiApp {
                     let color = self.matrix_color;
                     let r = {
                         let dev_guard = self.runtime_state.device.lock().unwrap();
-                        dev_guard.as_ref().map(|d| d.fill_matrix(color)).unwrap_or(Ok(()))
+                        dev_guard
+                            .as_ref()
+                            .map(|d| d.fill_matrix(color))
+                            .unwrap_or(Ok(()))
                     };
                     self.apply(r, "Underglow filled");
                     self.save_current_device_config();
@@ -2141,7 +2341,10 @@ impl GuiApp {
                 if ui.button("Off").clicked() {
                     let r = {
                         let dev_guard = self.runtime_state.device.lock().unwrap();
-                        dev_guard.as_ref().map(|d| d.fill_matrix([0, 0, 0])).unwrap_or(Ok(()))
+                        dev_guard
+                            .as_ref()
+                            .map(|d| d.fill_matrix([0, 0, 0]))
+                            .unwrap_or(Ok(()))
                     };
                     self.apply(r, "Underglow off");
                     self.save_current_device_config();
@@ -2159,8 +2362,12 @@ impl GuiApp {
                         (dev.get_firmware_version(), dev.get_serial())
                     } else {
                         (
-                            Err(razer_hid_client::ClientError::Device("no device connected".into())),
-                            Err(razer_hid_client::ClientError::Device("no device connected".into())),
+                            Err(razer_hid_client::ClientError::Device(
+                                "no device connected".into(),
+                            )),
+                            Err(razer_hid_client::ClientError::Device(
+                                "no device connected".into(),
+                            )),
                         )
                     }
                 };
@@ -2254,12 +2461,9 @@ impl GuiApp {
 
             ui.add_space(10.0);
             ui.label(
-                egui::RichText::new(format!(
-                    "Config file: {}",
-                    AppConfig::file_path().display()
-                ))
-                .small()
-                .color(theme::MUTED),
+                egui::RichText::new(format!("Config file: {}", AppConfig::file_path().display()))
+                    .small()
+                    .color(theme::MUTED),
             );
         });
     }

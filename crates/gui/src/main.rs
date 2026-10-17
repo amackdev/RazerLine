@@ -32,9 +32,9 @@ fn main() -> eframe::Result<()> {
     osd::init();
 
     let args: Vec<String> = std::env::args().collect();
-    let start_in_background = args.iter().any(|arg| {
-        arg == "--background" || arg == "--minimized" || arg == "-b"
-    });
+    let start_in_background = args
+        .iter()
+        .any(|arg| arg == "--background" || arg == "--minimized" || arg == "-b");
 
     app::run(start_in_background)
 }

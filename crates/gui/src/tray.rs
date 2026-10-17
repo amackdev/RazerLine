@@ -75,8 +75,6 @@ impl TrayManager {
             }
         });
 
-        Ok(Self {
-            _tray: tray,
-        })
+        Ok(Self { _tray: tray })
     }
 }

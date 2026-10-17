@@ -6,7 +6,11 @@ extern "system" {
     fn ShowWindow(hWnd: *mut std::ffi::c_void, nCmdShow: i32) -> i32;
     fn SetForegroundWindow(hWnd: *mut std::ffi::c_void) -> i32;
     fn IsWindowVisible(hWnd: *mut std::ffi::c_void) -> i32;
-    fn CreateMutexW(lpMutexAttributes: *const std::ffi::c_void, bInitialOwner: i32, lpName: *const u16) -> *mut std::ffi::c_void;
+    fn CreateMutexW(
+        lpMutexAttributes: *const std::ffi::c_void,
+        bInitialOwner: i32,
+        lpName: *const u16,
+    ) -> *mut std::ffi::c_void;
     fn GetLastError() -> u32;
 }
 
@@ -87,7 +91,9 @@ pub fn toggle_window() {
         if !hwnd.is_null() {
             let visible = unsafe { IsWindowVisible(hwnd) };
             if visible != 0 {
-                unsafe { ShowWindow(hwnd, SW_HIDE); }
+                unsafe {
+                    ShowWindow(hwnd, SW_HIDE);
+                }
             } else {
                 unsafe {
                     ShowWindow(hwnd, SW_RESTORE);

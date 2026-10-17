@@ -7,8 +7,8 @@ pub enum MouseButtonId {
     LeftClick,
     RightClick,
     MiddleClick,
-    TiltLeft,            // HyperScroll Tilt Left
-    TiltRight,           // HyperScroll Tilt Right
+    TiltLeft,  // HyperScroll Tilt Left
+    TiltRight, // HyperScroll Tilt Right
     ScrollUp,
     ScrollDown,
     SideBack,            // Mouse 4
