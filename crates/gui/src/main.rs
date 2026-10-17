@@ -14,6 +14,7 @@ mod buttons;
 mod config;
 mod input_hook;
 mod mouse_3d;
+mod osd;
 mod profiles;
 mod theme;
 mod tray;
@@ -26,6 +27,9 @@ fn main() -> eframe::Result<()> {
     if !win_util::acquire_single_instance() {
         return Ok(());
     }
+
+    // Initialize DPI OSD overlay HUD
+    osd::init();
 
     let args: Vec<String> = std::env::args().collect();
     let start_in_background = args.iter().any(|arg| {

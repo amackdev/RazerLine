@@ -342,7 +342,11 @@ impl GuiApp {
                 .find(|p| p.product_id == pid)
                 .copied()
             {
+                let old_dpi = self.dpi_x;
                 self.apply_user_profile(&user_prof, profile);
+                if old_dpi != user_prof.dpi {
+                    crate::osd::show_dpi(user_prof.dpi);
+                }
             }
             let _ = self.config.save();
         }
@@ -394,6 +398,8 @@ impl GuiApp {
                 self.dpi_y = hw_dpi.y;
                 self.custom_dpi_input = hw_dpi.x as u32;
 
+                crate::osd::show_dpi(hw_dpi.x);
+
                 if let Some(pid) = self.active_pid {
                     let dev_entry = self.config.devices.entry(pid).or_default();
                     let prof = dev_entry.ensure_profiles().active_profile_mut();
@@ -429,6 +435,8 @@ impl GuiApp {
         self.dpi_y = target_dpi;
         self.custom_dpi_input = target_dpi as u32;
 
+        crate::osd::show_dpi(target_dpi);
+
         let r = dev.set_dpi(target_dpi, target_dpi);
         self.apply(r, &format!("Switched to DPI Stage {}: {} DPI", next_idx + 1, target_dpi));
         let _ = self.config.save();
@@ -452,6 +460,8 @@ impl GuiApp {
         self.dpi_y = target_dpi;
         self.custom_dpi_input = target_dpi as u32;
 
+        crate::osd::show_dpi(target_dpi);
+
         let r = dev.set_dpi(target_dpi, target_dpi);
         self.apply(r, &format!("Switched to DPI Stage {}: {} DPI", stage_idx + 1, target_dpi));
         let _ = self.config.save();
@@ -465,6 +475,8 @@ impl GuiApp {
         self.dpi_x = target_dpi;
         self.dpi_y = target_dpi;
         self.custom_dpi_input = target_dpi as u32;
+
+        crate::osd::show_dpi(target_dpi);
 
         let dev_entry = self.config.devices.entry(pid).or_default();
         let prof = dev_entry.ensure_profiles().active_profile_mut();
@@ -637,6 +649,7 @@ impl eframe::App for GuiApp {
                     }
                     if let Some(dev) = &self.device {
                         let _ = dev.set_dpi(clutch_dpi, clutch_dpi);
+                        crate::osd::show_dpi(clutch_dpi);
                         self.set_status(format!("Sniper Clutch Active: {clutch_dpi} DPI"), false);
                     }
                 }
@@ -644,12 +657,26 @@ impl eframe::App for GuiApp {
                     if let Some(orig) = self.original_clutch_dpi.take() {
                         if let Some(dev) = &self.device {
                             let _ = dev.set_dpi(orig, orig);
+                            crate::osd::show_dpi(orig);
                             self.set_status(format!("DPI Restored: {orig} DPI"), false);
                         }
                     }
                 }
                 HookCommand::CycleProfile => self.cycle_active_profile(),
             }
+        }
+
+        static EGUI_CTX: std::sync::OnceLock<egui::Context> = std::sync::OnceLock::new();
+        if EGUI_CTX.get().is_none() {
+            let _ = EGUI_CTX.set(ctx.clone());
+            let _ = std::thread::Builder::new()
+                .name("razerline-bg-heartbeat".into())
+                .spawn(|| loop {
+                    std::thread::sleep(std::time::Duration::from_millis(300));
+                    if let Some(c) = EGUI_CTX.get() {
+                        c.request_repaint();
+                    }
+                });
         }
 
         ctx.request_repaint_after(DPI_POLL_INTERVAL);
