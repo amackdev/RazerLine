@@ -1403,12 +1403,12 @@ impl GuiApp {
 
             // Immediate Trigger Action button if inspecting DPI Switch or Profile Switch
             if btn_id == MouseButtonId::DpiSwitch || matches!(current_action, ButtonAction::Sensitivity(SensitivityAction::CycleDpi)) {
-                if ui.button("⚡ Test / Cycle DPI Now (Hardware)").clicked() {
+                if ui.button("Test / Cycle DPI Now (Hardware)").clicked() {
                     trigger_dpi_cycle = true;
                 }
                 ui.add_space(8.0);
             } else if btn_id == MouseButtonId::ProfileSwitch || matches!(current_action, ButtonAction::ProfileCycle) {
-                if ui.button("⚡ Test / Cycle Profile Now").clicked() {
+                if ui.button("Test / Cycle Profile Now").clicked() {
                     trigger_profile_cycle = true;
                 }
                 ui.add_space(8.0);
@@ -1447,6 +1447,8 @@ impl GuiApp {
                     (MouseFunction::LeftClick, "Left Click"),
                     (MouseFunction::RightClick, "Right Click"),
                     (MouseFunction::MiddleClick, "Middle Click"),
+                    (MouseFunction::ScrollLeft, "Scroll Left"),
+                    (MouseFunction::ScrollRight, "Scroll Right"),
                     (MouseFunction::Back, "Back (M4)"),
                     (MouseFunction::Forward, "Forward (M5)"),
                     (MouseFunction::DoubleClick, "Double Click"),
@@ -1486,7 +1488,7 @@ impl GuiApp {
             });
 
             if matches!(current_action, ButtonAction::Sensitivity(SensitivityAction::CycleDpi)) {
-                let stage_seq = prof.dpi_stages.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(" ➔ ");
+                let stage_seq = prof.dpi_stages.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(" -> ");
                 ui.label(
                     egui::RichText::new(format!("Configured Sequence: [ {stage_seq} ] DPI"))
                         .small()
@@ -1590,7 +1592,7 @@ impl GuiApp {
                         }
                     }
                     ui.add_space(16.0);
-                    if ui.button("⚡ Test Cycle Next Stage").clicked() {
+                    if ui.button("Cycle Next Stage").on_hover_text("Advance hardware DPI to the next configured stage").clicked() {
                         self.cycle_dpi_stage();
                     }
                 });
@@ -1614,38 +1616,50 @@ impl GuiApp {
 
                     egui::Frame::none()
                         .fill(if is_active {
-                            Color32::from_rgba_premultiplied(0, 255, 100, 16)
+                            Color32::from_rgb(20, 34, 26)
                         } else {
-                            Color32::from_gray(24)
+                            Color32::from_rgb(26, 27, 31)
                         })
                         .stroke(egui::Stroke::new(
                             if is_active { 1.5_f32 } else { 1.0_f32 },
-                            if is_active { theme::ACCENT } else { Color32::from_gray(45) },
+                            if is_active { theme::ACCENT } else { Color32::from_rgb(46, 48, 56) },
                         ))
                         .rounding(8.0)
                         .inner_margin(egui::Margin::symmetric(14.0, 10.0))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                // Stage Number & Status
+                                // Stage Number & Status Badge
                                 if is_active {
                                     ui.label(
                                         egui::RichText::new(format!("STAGE {}", idx + 1))
                                             .strong()
-                                            .color(theme::ACCENT),
+                                            .color(Color32::WHITE),
                                     );
-                                    ui.label(
-                                        egui::RichText::new("★ ACTIVE")
-                                            .small()
-                                            .strong()
-                                            .color(theme::ACCENT),
-                                    );
+                                    egui::Frame::none()
+                                        .fill(Color32::from_rgb(18, 52, 32))
+                                        .stroke(egui::Stroke::new(1.0_f32, theme::ACCENT))
+                                        .rounding(4.0)
+                                        .inner_margin(egui::Margin::symmetric(7.0, 2.5))
+                                        .show(ui, |ui| {
+                                            ui.label(
+                                                egui::RichText::new("ACTIVE")
+                                                    .small()
+                                                    .strong()
+                                                    .color(theme::ACCENT),
+                                            );
+                                        });
                                 } else {
                                     ui.label(
                                         egui::RichText::new(format!("STAGE {}", idx + 1))
                                             .strong()
-                                            .color(Color32::from_gray(180)),
+                                            .color(Color32::from_rgb(160, 165, 175)),
                                     );
-                                    if ui.button("Activate").clicked() {
+                                    let act_btn = egui::Button::new(
+                                        egui::RichText::new("Activate")
+                                            .small()
+                                            .color(Color32::from_rgb(200, 205, 215)),
+                                    );
+                                    if ui.add(act_btn).clicked() {
                                         stage_to_activate = Some(idx);
                                     }
                                 }
@@ -1687,7 +1701,12 @@ impl GuiApp {
                                 // Delete Stage Button (if > 1 stage)
                                 if dpi_stages.len() > 1 {
                                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        if ui.button(egui::RichText::new("✕").color(Color32::from_gray(140))).clicked() {
+                                        let del_btn = egui::Button::new(
+                                            egui::RichText::new("Delete")
+                                                .small()
+                                                .color(Color32::from_rgb(225, 95, 95)),
+                                        );
+                                        if ui.add(del_btn).on_hover_text("Delete this DPI stage").clicked() {
                                             stage_to_remove = Some(idx);
                                         }
                                     });
@@ -1713,14 +1732,17 @@ impl GuiApp {
                 // Stage Management Action Buttons
                 ui.horizontal(|ui| {
                     if dpi_stages.len() < 5 {
-                        if ui.button("➕ Add Stage").clicked() {
+                        let add_btn = egui::Button::new(
+                            egui::RichText::new("+ Add Stage").color(theme::ACCENT),
+                        );
+                        if ui.add(add_btn).on_hover_text("Add another DPI stage (up to 5 stages)").clicked() {
                             self.add_dpi_stage(dpi.min, dpi.max);
                         }
                     }
-                    if ui.button("⇅ Sort Low to High").clicked() {
+                    if ui.button("Sort Low to High").on_hover_text("Sort stages in ascending order").clicked() {
                         self.sort_dpi_stages();
                     }
-                    if ui.button("↺ Reset Defaults (400 - 6400)").clicked() {
+                    if ui.button("Reset Defaults (400 - 6400)").on_hover_text("Reset to standard Razer 5-stage defaults").clicked() {
                         self.reset_dpi_stages_to_default();
                     }
                 });
