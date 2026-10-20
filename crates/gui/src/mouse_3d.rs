@@ -8,11 +8,14 @@ use crate::theme;
 
 static SVG_BASILISK_TOP: &[u8] = include_bytes!("../assets/basilisk_v3.svg");
 static SVG_BASILISK_BOTTOM: &[u8] = include_bytes!("../assets/basilisk_v3_bottom.svg");
+static SVG_VIPER_ULT_TOP: &[u8] = include_bytes!("../assets/viper_ultimate.svg");
+static SVG_VIPER_ULT_BOTTOM: &[u8] = include_bytes!("../assets/viper_ultimate_bottom.svg");
 static SVG_GENERIC: &[u8] = include_bytes!("../assets/generic_mouse.svg");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeviceChassis {
     BasiliskV3,       // Razer Basilisk V3 specific model
+    ViperUltimate,    // Razer Viper Ultimate (ambidextrous)
     GenericErgonomic, // Fallback when device specific model is missing
 }
 
@@ -21,6 +24,8 @@ impl DeviceChassis {
         let lower = name.to_lowercase();
         if lower.contains("basilisk") {
             DeviceChassis::BasiliskV3
+        } else if lower.contains("viper ultimate") {
+            DeviceChassis::ViperUltimate
         } else {
             DeviceChassis::GenericErgonomic
         }
@@ -29,6 +34,7 @@ impl DeviceChassis {
     pub fn display_name(&self) -> &'static str {
         match self {
             DeviceChassis::BasiliskV3 => "Razer Basilisk V3 (Specific Hardware Model)",
+            DeviceChassis::ViperUltimate => "Razer Viper Ultimate (Specific Hardware Model)",
             DeviceChassis::GenericErgonomic => "Generic Razer Gaming Mouse (Fallback Model)",
         }
     }
@@ -101,6 +107,19 @@ impl Mouse3dView {
                     self.render_basilisk_top_view(ui, &painter, center, selected_button, rgb, time)
                 }
                 MouseViewMode::BottomView => self.render_basilisk_bottom_view(
+                    ui,
+                    &painter,
+                    center,
+                    selected_button,
+                    rgb,
+                    time,
+                ),
+            },
+            DeviceChassis::ViperUltimate => match self.view_mode {
+                MouseViewMode::TopDown => {
+                    self.render_viper_ult_top_view(ui, &painter, center, selected_button, rgb, time)
+                }
+                MouseViewMode::BottomView => self.render_viper_ult_bottom_view(
                     ui,
                     &painter,
                     center,
@@ -383,6 +402,170 @@ impl Mouse3dView {
             painter,
             center + egui::vec2(0.0, 138.0),
             center + egui::vec2(185.0, 92.0),
+            "100% Pure PTFE Glides",
+        );
+
+        clicked
+    }
+
+    // ═════════════════════════════════════════════════════════════════════
+    // RAZER VIPER ULTIMATE: TOP VIEW (SVG Vector Model with Live Chroma)
+    // ═════════════════════════════════════════════════════════════════════
+    fn render_viper_ult_top_view(
+        &self,
+        ui: &mut Ui,
+        painter: &egui::Painter,
+        center: Pos2,
+        selected: Option<MouseButtonId>,
+        led_color: Color32,
+        _time: f64,
+    ) -> Option<MouseButtonId> {
+        let mut clicked = None;
+
+        // 1. Chroma Logo underglow desk halo
+        painter.circle_filled(
+            center + egui::vec2(0.0, 30.0),
+            150.0_f32,
+            Color32::from_rgba_unmultiplied(led_color.r(), led_color.g(), led_color.b(), 28),
+        );
+
+        // 2. Render Authentic Viper Ultimate SVG Vector Model
+        let img_size = egui::vec2(280.0, 392.0);
+        let img_rect = Rect::from_center_size(center, img_size);
+        let img = egui::Image::from_bytes("bytes://viper_ultimate.svg", SVG_VIPER_ULT_TOP);
+        img.paint_at(ui, img_rect);
+
+        // 3. Live Chroma Logo illumination
+        let logo_center = center + egui::vec2(0.0, 78.0);
+        painter.circle_filled(
+            logo_center,
+            15.0_f32,
+            Color32::from_rgba_unmultiplied(led_color.r(), led_color.g(), led_color.b(), 55),
+        );
+
+        // 4. Interactive Callout Pins — Viper Ultimate button layout
+        //    (no tilt wheel, no scroll mode toggle, no sniper clutch)
+        let wheel_center = center + egui::vec2(0.0, -96.0);
+        let pins = [
+            (
+                MouseButtonId::MiddleClick,
+                wheel_center,
+                center + egui::vec2(-198.0, -90.0),
+                "Scroll Click",
+            ),
+            (
+                MouseButtonId::SideForward,
+                center + egui::vec2(-70.0, -32.0),
+                center + egui::vec2(-198.0, -40.0),
+                "Mouse Button 5",
+            ),
+            (
+                MouseButtonId::SideBack,
+                center + egui::vec2(-68.0, 4.0),
+                center + egui::vec2(-198.0, 10.0),
+                "Mouse Button 4",
+            ),
+            (
+                MouseButtonId::DpiSwitch,
+                center + egui::vec2(0.0, -44.0),
+                center + egui::vec2(-198.0, 60.0),
+                "DPI Cycle Button",
+            ),
+            (
+                MouseButtonId::ScrollUp,
+                wheel_center + egui::vec2(0.0, -12.0),
+                center + egui::vec2(198.0, -90.0),
+                "Scroll Up",
+            ),
+            (
+                MouseButtonId::ScrollDown,
+                wheel_center + egui::vec2(0.0, 12.0),
+                center + egui::vec2(198.0, -40.0),
+                "Scroll Down",
+            ),
+        ];
+
+        for (btn_id, target_pos, badge_pos, text) in pins {
+            let is_sel = selected == Some(btn_id);
+            if self.draw_callout_pin(ui, painter, target_pos, badge_pos, text, is_sel) {
+                clicked = Some(btn_id);
+            }
+        }
+
+        clicked
+    }
+
+    // ═════════════════════════════════════════════════════════════════════
+    // RAZER VIPER ULTIMATE: BOTTOM VIEW (Profile Switch & Sensor)
+    // ═════════════════════════════════════════════════════════════════════
+    fn render_viper_ult_bottom_view(
+        &self,
+        ui: &mut Ui,
+        painter: &egui::Painter,
+        center: Pos2,
+        selected: Option<MouseButtonId>,
+        led_color: Color32,
+        _time: f64,
+    ) -> Option<MouseButtonId> {
+        let mut clicked = None;
+
+        // 1. Desk Chroma Underglow halo
+        painter.circle_filled(
+            center + egui::vec2(0.0, 20.0),
+            150.0_f32,
+            Color32::from_rgba_unmultiplied(led_color.r(), led_color.g(), led_color.b(), 32),
+        );
+
+        // 2. Render Authentic Viper Ultimate Bottom SVG
+        let img_size = egui::vec2(280.0, 392.0);
+        let img_rect = Rect::from_center_size(center, img_size);
+        let img =
+            egui::Image::from_bytes("bytes://viper_ultimate_bottom.svg", SVG_VIPER_ULT_BOTTOM);
+        img.paint_at(ui, img_rect);
+
+        // 3. Hardware Profile Status LED
+        let profile_btn_pos = center + egui::vec2(-8.0, 86.0);
+        let profile_led_pos = center + egui::vec2(10.0, 86.0);
+        painter.circle_filled(profile_led_pos, 4.5_f32, led_color);
+        painter.circle_stroke(
+            profile_led_pos,
+            7.5_f32,
+            Stroke::new(
+                1.5_f32,
+                Color32::from_rgba_unmultiplied(led_color.r(), led_color.g(), led_color.b(), 110),
+            ),
+        );
+        painter.circle_filled(profile_led_pos, 1.8_f32, Color32::WHITE);
+
+        // 4. Optical Sensor Center Target
+        let sensor_pos = center + egui::vec2(0.0, 12.0);
+        painter.circle_filled(sensor_pos, 3.0_f32, Color32::from_rgb(255, 30, 30));
+
+        // 5. Interactive Callout for Profile Switch
+        let is_prof_sel = selected == Some(MouseButtonId::ProfileSwitch);
+        if self.draw_callout_pin(
+            ui,
+            painter,
+            profile_btn_pos,
+            center + egui::vec2(-198.0, 86.0),
+            "Cycle Up Profile",
+            is_prof_sel,
+        ) {
+            clicked = Some(MouseButtonId::ProfileSwitch);
+        }
+
+        // 6. Info badges
+        self.draw_info_badge(
+            painter,
+            sensor_pos,
+            center + egui::vec2(185.0, 12.0),
+            "Focus+ 20K Sensor",
+        );
+
+        self.draw_info_badge(
+            painter,
+            center + egui::vec2(0.0, 132.0),
+            center + egui::vec2(185.0, 86.0),
             "100% Pure PTFE Glides",
         );
 
