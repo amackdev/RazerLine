@@ -336,10 +336,18 @@ impl RazerDevice {
         let mut report = RazerReport::new(dpi.command_class, dpi.get_command_id, args)?;
         report.transaction_id = dpi.transaction_id;
         let resp = self.transact(&report)?;
+        // `transact` only guarantees a SUCCESSFUL/BUSY status with the
+        // right class/id echoed back — not that `arguments` is long
+        // enough. A device profile with a slightly wrong command id
+        // (most are `Confidence::Unverified`) can still answer
+        // successfully with a short payload; index via `get` so that
+        // mismatch surfaces as zeroed DPI rather than panicking the
+        // whole process on every connect/profile switch.
         let a = &resp.arguments;
+        let byte = |i: usize| *a.get(i).unwrap_or(&0) as u16;
         Ok(DpiSetting {
-            x: ((a[1] as u16) << 8) | a[2] as u16,
-            y: ((a[3] as u16) << 8) | a[4] as u16,
+            x: (byte(1) << 8) | byte(2),
+            y: (byte(3) << 8) | byte(4),
         })
     }
 
@@ -758,7 +766,11 @@ impl RazerDevice {
         )?;
         report.transaction_id = identity.firmware_transaction_id;
         let resp = self.transact(&report)?;
-        Ok(format!("v{}.{}", resp.arguments[0], resp.arguments[1]))
+        // See `get_dpi`'s comment: a successful status doesn't guarantee
+        // a 2-byte response.
+        let major = *resp.arguments.first().unwrap_or(&0);
+        let minor = *resp.arguments.get(1).unwrap_or(&0);
+        Ok(format!("v{major}.{minor}"))
     }
 
     pub fn get_serial(&self) -> Result<String, DeviceError> {

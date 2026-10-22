@@ -282,6 +282,12 @@ unsafe extern "system" fn low_level_mouse_proc(
         _ => None,
     };
 
+    // Tilt-wheel ticks only ever synthesize a "down" event (there's no
+    // corresponding WM_MOUSEHWHEEL "up") — treat them as momentary so
+    // SniperClutch can't latch a clutch DPI it will never get a release
+    // to restore from.
+    let is_momentary = w_param == win32::WM_MOUSEHWHEEL;
+
     if let Some((btn_id, is_down)) = btn_and_is_down {
         if let Ok(lock) = CURRENT_MAPPINGS.read() {
             if let Some(map) = lock.as_ref() {
@@ -316,7 +322,10 @@ unsafe extern "system" fn low_level_mouse_proc(
                                         send_hook_command(HookCommand::SetClutchDpi(*clutch_dpi));
                                     }
                                 }
-                            } else if let SensitivityAction::SniperClutch { .. } = sa {
+                            }
+                            if (!is_down || is_momentary)
+                                && matches!(sa, SensitivityAction::SniperClutch { .. })
+                            {
                                 send_hook_command(HookCommand::RestoreClutchDpi);
                             }
                             return 1;
