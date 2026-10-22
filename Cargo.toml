@@ -6,7 +6,6 @@ members = [
     "crates/core",
     "crates/devices-mice",
     "crates/client",
-    "crates/gui",
     "crates/desktop/src-tauri",
 ]
 

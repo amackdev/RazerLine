@@ -50,7 +50,7 @@ pub fn spawn(app: AppHandle, state: AppState) {
 fn run(app: AppHandle, state: AppState) {
     // Start the native mouse hook (Windows only)
     #[cfg(windows)]
-    let mut hook_manager = {
+    let hook_manager = {
         let mut mgr = input_hook::InputHookManager::new();
         let cmd_rx = mgr.take_command_rx();
         (mgr, cmd_rx)
@@ -63,7 +63,7 @@ fn run(app: AppHandle, state: AppState) {
     loop {
         // Process hardware commands from the mouse hook
         #[cfg(windows)]
-        if let Some((_, ref rx)) = hook_manager {
+        if let Some(ref rx) = hook_manager.1 {
             while let Ok(cmd) = rx.try_recv() {
                 process_hook_command(&app, &state, cmd);
             }

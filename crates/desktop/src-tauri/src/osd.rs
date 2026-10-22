@@ -375,7 +375,7 @@ mod win32 {
 
     #[link(name = "user32")]
     #[link(name = "gdi32")]
-    extern "system" {
+    unsafe extern "system" {
         pub fn RegisterClassExW(lpWndClass: *const WNDCLASSEXW) -> u16;
         pub fn CreateWindowExW(
             dwExStyle: u32,

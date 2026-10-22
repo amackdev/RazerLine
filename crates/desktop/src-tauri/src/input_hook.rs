@@ -125,7 +125,7 @@ mod windows_impl {
         }
 
         #[link(name = "user32")]
-        extern "system" {
+        unsafe extern "system" {
             pub fn SetWindowsHookExW(
                 idHook: i32,
                 lpfn: HOOKPROC,
@@ -248,7 +248,7 @@ mod windows_impl {
             return win32::CallNextHookEx(std::ptr::null_mut(), n_code, w_param, l_param);
         }
 
-        let hook_struct = *(l_param as *const win32::MSLLHOOKSTRUCT);
+        let hook_struct = unsafe { *(l_param as *const win32::MSLLHOOKSTRUCT) };
 
         // Skip synthetic events injected by ourselves or other tools to avoid feedback loops
         if (hook_struct.flags & win32::LLMHF_INJECTED) != 0 {
@@ -472,7 +472,7 @@ mod windows_impl {
         }
     }
 
-    // Re-export for use in worker.rs
+    // Public items for the crate
     pub use self::HookCommand;
     pub use self::InputHookManager;
 }

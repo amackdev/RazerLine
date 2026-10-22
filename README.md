@@ -126,15 +126,15 @@ cd RazerLine
 cargo build --release --workspace
 ```
 Compiled binaries and runtime DLLs will be output to `target\release\`:
-* `razerline.exe` (Desktop Application)
+* `razer-hid-desktop.exe` (Desktop Application)
 * `razer_hid_core.dll` (Engine Driver)
 * `razer_hid_devices_mice.dll` (Device Database)
 
 ### 3. Launch RazerLine
 ```powershell
-.\target\release\razerline.exe
+.\target\release\razer-hid-desktop.exe
 ```
-*(To launch directly to the system tray on startup: `.\target\release\razerline.exe --background`)*
+*(To launch directly to the system tray on startup: `.\target\release\razer-hid-desktop.exe --background`)*
 
 ---
 
@@ -150,13 +150,13 @@ RazerLine/
 │   ├── core/           (razer-hid-core)         Hardware communication engine compiled to dynamic library (cdylib)
 │   ├── devices-mice/   (razer-hid-devices-mice) 95+ declarative Razer device profiles compiled to dynamic library (cdylib)
 │   ├── client/         (razer-hid-client)       Runtime dynamic DLL loader and safe abstractions over FFI
-│   └── gui/            (razer-hid-gui)          Desktop UI, Win32 low-level mouse hooks, OSD overlay, and tray daemon
+│   └── desktop/        (razer-hid-desktop)      Tauri v2 + Svelte 5 desktop UI, Win32 low-level mouse hooks, OSD overlay, and tray daemon
 ├── assets/             (Branding & Icons)       High-res vector logo, application icons, and graphics
 └── Cargo.toml          (Workspace Manifest)     Root configuration and dependency specifications
 ```
 
 ### Dynamic Plugin Architecture
-`razer-hid-core` and `razer-hid-devices-mice` are compiled as runtime-loaded dynamic link libraries (`.dll`). The main application executable (`razerline.exe`) loads them dynamically upon startup. This architecture ensures:
+`razer-hid-core` and `razer-hid-devices-mice` are compiled as runtime-loaded dynamic link libraries (`.dll`). The main application executable (`razer-hid-desktop.exe`) loads them dynamically upon startup. This architecture ensures:
 1. **Extensibility:** The device catalog DLL can be updated independently without recompiling the main application.
 2. **Binary Isolation:** Memory boundaries are cleanly partitioned through a strict C-compatible FFI boundary (`razer_core_call`).
 
