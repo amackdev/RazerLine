@@ -1,11 +1,18 @@
 //! RazerLine desktop app — Tauri Rust backend. The frontend (Svelte) talks
-//! to this through `#[tauri::command]`s; see `commands.rs` once device
-//! control commands land (Phase 2 of the migration).
+//! to this through the `#[tauri::command]`s in `commands.rs`; the
+//! background device scan/connect/battery/DPI-poll loop in `worker.rs`
+//! pushes updates the other direction via Tauri events.
+
+mod commands;
+mod state;
+mod worker;
 
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_autostart::MacosLauncher;
+
+use state::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -22,6 +29,10 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            let state = AppState::new();
+            app.manage(state.clone());
+            worker::spawn(app.handle().clone(), state);
+
             let show = MenuItem::with_id(app, "show", "Open RazerLine", true, None::<&str>)?;
             let hide = MenuItem::with_id(app, "hide", "Hide to Tray", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
@@ -61,7 +72,23 @@ pub fn run() {
                 let _ = window.hide();
             }
         })
-        .invoke_handler(tauri::generate_handler![])
+        .invoke_handler(tauri::generate_handler![
+            commands::list_connected,
+            commands::connect_device,
+            commands::active_device,
+            commands::get_dpi,
+            commands::set_dpi,
+            commands::get_poll_rate,
+            commands::set_poll_rate,
+            commands::get_battery_level,
+            commands::get_charging_status,
+            commands::get_idle_time,
+            commands::set_idle_time,
+            commands::get_low_battery_threshold,
+            commands::set_low_battery_threshold,
+            commands::get_firmware_version,
+            commands::get_serial,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
