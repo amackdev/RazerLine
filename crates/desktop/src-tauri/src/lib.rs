@@ -1,3 +1,4 @@
+#![allow(unsafe_op_in_unsafe_fn)]
 //! RazerLine desktop app — Tauri Rust backend. The frontend (Svelte) talks
 //! to this through the `#[tauri::command]`s in `commands.rs`; the
 //! background device scan/connect/battery/DPI-poll loop in `worker.rs`

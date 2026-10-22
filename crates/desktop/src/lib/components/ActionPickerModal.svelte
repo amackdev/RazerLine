@@ -89,25 +89,32 @@
 				<!-- Category Tabs -->
 				<div class="category-tabs">
 					<button class="cat-tab" class:active={activeCategory === "default"} onclick={() => (activeCategory = "default")}>
-						<span class="cat-icon">⚡</span> Default
+						<svg class="cat-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+						Default
 					</button>
 					<button class="cat-tab" class:active={activeCategory === "mouse"} onclick={() => (activeCategory = "mouse")}>
-						<span class="cat-icon">🖱️</span> Mouse
+						<svg class="cat-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 3v5"/></svg>
+						Mouse
 					</button>
 					<button class="cat-tab" class:active={activeCategory === "sensitivity"} onclick={() => (activeCategory = "sensitivity")}>
-						<span class="cat-icon">🎯</span> Sensitivity
+						<svg class="cat-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
+						Sensitivity
 					</button>
 					<button class="cat-tab" class:active={activeCategory === "multimedia"} onclick={() => (activeCategory = "multimedia")}>
-						<span class="cat-icon">🎵</span> Media
+						<svg class="cat-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+						Media
 					</button>
 					<button class="cat-tab" class:active={activeCategory === "shortcuts"} onclick={() => (activeCategory = "shortcuts")}>
-						<span class="cat-icon">🪟</span> Windows
+						<svg class="cat-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>
+						Windows
 					</button>
 					<button class="cat-tab" class:active={activeCategory === "profile"} onclick={() => (activeCategory = "profile")}>
-						<span class="cat-icon">🔄</span> Profile
+						<svg class="cat-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+						Profile
 					</button>
 					<button class="cat-tab" class:active={activeCategory === "disabled"} onclick={() => (activeCategory = "disabled")}>
-						<span class="cat-icon">🚫</span> Disable
+						<svg class="cat-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M4.93 4.93l14.14 14.14"/></svg>
+						Disable
 					</button>
 				</div>
 
@@ -117,7 +124,9 @@
 					{#if activeCategory === "default"}
 						<div class="panel-section">
 							<div class="action-card-hero" onclick={() => handleChoose({ type: "Default" })}>
-								<div class="hero-icon">✓</div>
+								<div class="hero-icon">
+									<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+								</div>
 								<div class="hero-info">
 									<div class="hero-title">Factory Default Function</div>
 									<div class="hero-desc">Restores the standard hardware function: {buttonActionLabel(MB.defaultAction(button))}</div>
@@ -256,7 +265,9 @@
 					{#if activeCategory === "profile"}
 						<div class="panel-section">
 							<div class="action-card-hero" onclick={() => handleChoose(profileCycleAction)}>
-								<div class="hero-icon">🔄</div>
+								<div class="hero-icon">
+									<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+								</div>
 								<div class="hero-info">
 									<div class="hero-title">Cycle Next Profile</div>
 									<div class="hero-desc">Switches immediately to your next saved hardware configuration profile</div>
@@ -272,7 +283,9 @@
 					{#if activeCategory === "disabled"}
 						<div class="panel-section">
 							<div class="action-card-hero danger" onclick={() => handleChoose(disabledAction)}>
-								<div class="hero-icon danger">✕</div>
+								<div class="hero-icon danger">
+									<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+								</div>
 								<div class="hero-info">
 									<div class="hero-title">Disable This Button</div>
 									<div class="hero-desc">Completely suppresses and mutes inputs from this button</div>
@@ -406,7 +419,7 @@
 	.cat-tab {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
+		gap: 7px;
 		padding: 7px 14px;
 		background: transparent;
 		border: 1px solid transparent;
@@ -417,6 +430,12 @@
 		cursor: pointer;
 		white-space: nowrap;
 		transition: all 150ms;
+	}
+
+	.cat-svg {
+		width: 14px;
+		height: 14px;
+		flex-shrink: 0;
 	}
 
 	.cat-tab:hover {

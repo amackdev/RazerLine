@@ -14,12 +14,11 @@
 
 	let { delay = 0 }: Props = $props();
 
-	let activeTab = $state<"both" | "top" | "bottom">("both");
+	let activeTab = $state<"top" | "bottom">("top");
 	let selectedButton = $state<MouseButtonId | null>(null);
 	let isModalOpen = $state<boolean>(false);
 
 	const tabs = [
-		{ id: "both", label: "TOP & BOTTOM" },
 		{ id: "top", label: "TOP VIEW" },
 		{ id: "bottom", label: "BOTTOM VIEW" },
 	] as const;
@@ -39,7 +38,7 @@
 
 	const topSvgSrc = $derived(`/assets/${getSVGName()}.svg`);
 	const bottomSvgSrc = $derived(`/assets/${getSVGName()}_bottom.svg`);
-	const svgSrc = $derived(`/assets/${getSVGName()}${activeTab === "bottom" ? "_bottom" : ""}.svg`);
+	const currentSvgSrc = $derived(activeTab === "top" ? topSvgSrc : bottomSvgSrc);
 
 	function handleSelect(button: MouseButtonId) {
 		selectedButton = button;
@@ -73,7 +72,7 @@
 		device.info;
 		selectedButton = null;
 		isModalOpen = false;
-		activeTab = "both";
+		activeTab = "top";
 	});
 
 	onMount(() => {
@@ -87,7 +86,7 @@
 	<div class="card-header">
 		<div class="header-left">
 			<h3>CUSTOMIZE</h3>
-			<p class="subtitle">Click any button on the mouse to assign custom actions and shortcuts</p>
+			<p class="subtitle">Click any button on the mouse or in the list to reassign its function</p>
 		</div>
 		<div class="header-actions">
 			{#if device.info}
@@ -99,7 +98,7 @@
 		</div>
 	</div>
 
-	<!-- View Mode Tabs (Both, Top, Bottom) -->
+	<!-- View Mode Tabs (Top View & Bottom View) -->
 	<div class="view-tabs-container">
 		<div class="view-tabs">
 			{#each tabs as tab}
@@ -107,12 +106,7 @@
 					class="tab {activeTab === tab.id ? 'active' : ''}"
 					onclick={() => (activeTab = tab.id)}
 				>
-					{#if tab.id === "both"}
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-							<rect x="3" y="4" width="8" height="16" rx="3" />
-							<rect x="13" y="4" width="8" height="16" rx="3" />
-						</svg>
-					{:else if tab.id === "top"}
+					{#if tab.id === "top"}
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
 							<rect x="7" y="3" width="10" height="18" rx="5" />
 							<line x1="12" y1="3" x2="12" y2="9" />
@@ -129,46 +123,19 @@
 		</div>
 	</div>
 
-	<div class="customize-content" class:dual-layout={activeTab === "both"}>
-		<!-- Left: Interactive Mouse Diagram (Front and Center) -->
-		<div class="diagram-pane" class:dual={activeTab === "both"}>
-			{#if activeTab === "both"}
-				<div class="dual-container">
-					<div class="dual-column">
-						<div class="dual-tag">TOP VIEW</div>
-						<MouseDiagram
-							src={topSvgSrc}
-							{selectedButton}
-							mappings={buttonMapping.mappings}
-							onSelect={handleSelect}
-							viewMode="top"
-							compact={true}
-						/>
-					</div>
-					<div class="dual-column">
-						<div class="dual-tag">BOTTOM VIEW</div>
-						<MouseDiagram
-							src={bottomSvgSrc}
-							{selectedButton}
-							mappings={buttonMapping.mappings}
-							onSelect={handleSelect}
-							viewMode="bottom"
-							compact={true}
-						/>
-					</div>
-				</div>
-			{:else}
-				<MouseDiagram
-					src={svgSrc}
-					{selectedButton}
-					mappings={buttonMapping.mappings}
-					onSelect={handleSelect}
-					viewMode={activeTab}
-				/>
-			{/if}
+	<div class="customize-content">
+		<!-- Left: Interactive Mouse Diagram (Spacious and Centered) -->
+		<div class="diagram-pane">
+			<MouseDiagram
+				src={currentSvgSrc}
+				{selectedButton}
+				mappings={buttonMapping.mappings}
+				onSelect={handleSelect}
+				viewMode={activeTab}
+			/>
 		</div>
 
-		<!-- Right: Quick Button Mapping Sidebar -->
+		<!-- Right: Clean Button Mapping Grid -->
 		<div class="grid-pane">
 			<ButtonMappingGrid
 				mappings={buttonMapping.mappings}
@@ -201,48 +168,43 @@
 		display: flex;
 		flex-direction: column;
 		height: 100%;
-		min-height: 0;
+		gap: 12px;
 	}
 
 	.card-header {
 		display: flex;
-		justify-content: space-between;
 		align-items: center;
-		margin-bottom: 14px;
+		justify-content: space-between;
+		padding-bottom: 8px;
+		border-bottom: 1px solid #1f2229;
 	}
 
 	.header-left h3 {
 		margin: 0;
-		font-size: 13px;
+		font-size: 14px;
 		font-weight: 700;
 		letter-spacing: 0.5px;
-		color: var(--muted, #8d9098);
+		color: #ffffff;
 		text-transform: uppercase;
 	}
 
 	.subtitle {
-		margin: 2px 0 0;
+		margin: 3px 0 0;
 		font-size: 11px;
 		color: #8d9098;
 	}
 
-	.header-actions {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-	}
-
 	.device-badge {
-		font-size: 11px;
-		font-weight: 600;
-		padding: 4px 12px;
-		background: rgba(64, 209, 128, 0.1);
-		border: 1px solid rgba(64, 209, 128, 0.3);
-		border-radius: 20px;
-		color: #40d180;
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
+		padding: 4px 10px;
+		border-radius: 6px;
+		background: #15181d;
+		border: 1px solid #232731;
+		font-size: 11px;
+		font-weight: 600;
+		color: #d1d5db;
 	}
 
 	.badge-dot {
@@ -256,15 +218,15 @@
 	.view-tabs-container {
 		display: flex;
 		justify-content: center;
-		margin-bottom: 12px;
+		margin-bottom: 4px;
 	}
 
 	.view-tabs {
 		display: inline-flex;
-		background: #14161a;
-		border: 1px solid #282c35;
-		border-radius: 10px;
-		padding: 4px;
+		background: #121418;
+		border: 1px solid #242831;
+		border-radius: 8px;
+		padding: 3px;
 		gap: 4px;
 	}
 
@@ -272,22 +234,22 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 8px;
-		padding: 7px 22px;
+		padding: 6px 18px;
 		background: transparent;
 		border: 1px solid transparent;
-		border-radius: 8px;
+		border-radius: 6px;
 		font-size: 11px;
 		font-weight: 600;
 		letter-spacing: 0.3px;
 		color: #8d9098;
 		cursor: pointer;
-		transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1);
+		transition: all 140ms ease;
 		user-select: none;
 	}
 
 	.tab:hover {
 		color: #ffffff;
-		background: rgba(255, 255, 255, 0.05);
+		background: rgba(255, 255, 255, 0.04);
 	}
 
 	.tab.active {
@@ -299,23 +261,18 @@
 
 	.customize-content {
 		display: grid;
-		grid-template-columns: 1.15fr 1fr;
-		gap: 28px;
+		grid-template-columns: 1.3fr 1fr;
+		gap: 20px;
 		flex: 1;
 		min-height: 0;
 		align-items: start;
 	}
 
-	.customize-content.dual-layout {
-		grid-template-columns: 1.45fr 1fr;
-		gap: 20px;
-	}
-
 	.diagram-pane {
 		min-width: 0;
-		background: #131518;
-		border: 1px solid #22252d;
-		border-radius: 16px;
+		background: #111317;
+		border: 1px solid #1f232c;
+		border-radius: 14px;
 		padding: 16px;
 		box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.3);
 		display: flex;
@@ -323,47 +280,13 @@
 		justify-content: center;
 	}
 
-	.diagram-pane.dual {
-		padding: 12px;
-	}
-
-	.dual-container {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 12px;
-		width: 100%;
-	}
-
-	.dual-column {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		position: relative;
-		background: #101215;
-		border: 1px solid #1f2229;
-		border-radius: 14px;
-		padding: 10px 4px;
-	}
-
-	.dual-tag {
-		font-size: 10px;
-		font-weight: 700;
-		letter-spacing: 0.1em;
-		color: #40d180;
-		background: rgba(64, 209, 128, 0.12);
-		border: 1px solid rgba(64, 209, 128, 0.25);
-		padding: 3px 12px;
-		border-radius: 20px;
-		margin-bottom: 2px;
-	}
-
 	.grid-pane {
 		min-width: 0;
 		overflow-y: auto;
-		background: #131518;
-		border: 1px solid #22252d;
-		border-radius: 16px;
-		padding: 16px 18px;
+		background: #111317;
+		border: 1px solid #1f232c;
+		border-radius: 14px;
+		padding: 16px;
 		box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.3);
 	}
 
@@ -373,13 +296,7 @@
 		justify-content: center;
 		height: 100%;
 		color: var(--muted);
-		font-size: 14px;
+		font-size: 13px;
 		grid-column: 1 / -1;
-	}
-
-	@media (max-width: 960px) {
-		.customize-content {
-			grid-template-columns: 1fr;
-		}
 	}
 </style>
