@@ -11,6 +11,7 @@
 	import InfoCard from "../lib/components/InfoCard.svelte";
 	import LightingCard from "../lib/components/LightingCard.svelte";
 	import MatrixCard from "../lib/components/MatrixCard.svelte";
+	import ProfilesCard from "../lib/components/ProfilesCard.svelte";
 
 	import { device, refreshActiveDevice, startDeviceListeners } from "../lib/state/device.svelte";
 	import { refreshDpi, startDpiListeners } from "../lib/state/dpi.svelte";
@@ -30,6 +31,7 @@
 	const tabs = [
 		{ id: "performance", label: "PERFORMANCE" },
 		{ id: "lighting", label: "LIGHTING" },
+		{ id: "profiles", label: "PROFILES" },
 	];
 	let activeTab = $state("performance");
 </script>
@@ -82,6 +84,8 @@
 								delay={60}
 							/>
 						{/if}
+					{:else if activeTab === "profiles"}
+						<ProfilesCard delay={0} />
 					{/if}
 				</div>
 			{/key}
