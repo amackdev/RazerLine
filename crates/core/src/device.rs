@@ -770,4 +770,56 @@ impl RazerDevice {
             .unwrap_or(resp.arguments.len());
         Ok(String::from_utf8_lossy(&resp.arguments[..end]).into_owned())
     }
+
+    // -- Battery (wireless/dock-chargeable devices) --------------------------
+
+    /// Battery charge, 0-100%. `response.arguments[1]` is a raw 0-255
+    /// byte in OpenRazer's own driver (`razer_attr_read_charge_level` in
+    /// `razermouse_driver.c` emits it unscaled) — the percentage
+    /// conversion is done here, one layer up, the way OpenRazer's daemon
+    /// (not its kernel driver) does it.
+    pub fn get_battery_level(&self) -> Result<u8, DeviceError> {
+        let battery = self
+            .profile
+            .battery
+            .ok_or(DeviceError::Unsupported("battery level", self.profile.name))?;
+        let mut report = RazerReport::new(
+            battery.command_class,
+            battery.get_level_command_id,
+            vec![0u8; 2],
+        )?;
+        report.transaction_id = battery.transaction_id;
+        let resp = self.transact(&report)?;
+        let raw = *resp.arguments.get(1).unwrap_or(&0);
+        Ok(((raw as u16 * 100 + 127) / 255) as u8)
+    }
+
+    /// Whether the device is currently charging. Devices that run on a
+    /// primary (e.g. AA) battery with no onboard charging circuit always
+    /// report `Ok(false)` without a HID round trip, matching OpenRazer's
+    /// own hardcoded "0" for that group in `razer_attr_read_charge_status`.
+    pub fn get_charging_status(&self) -> Result<bool, DeviceError> {
+        let battery = self.profile.battery.ok_or(DeviceError::Unsupported(
+            "charging status",
+            self.profile.name,
+        ))?;
+        let transaction_id = match battery.charging_status {
+            razer_hid_abi::ChargingStatusSupport::Supported { transaction_id } => transaction_id,
+            razer_hid_abi::ChargingStatusSupport::NotApplicable => return Ok(false),
+            razer_hid_abi::ChargingStatusSupport::Unsupported => {
+                return Err(DeviceError::Unsupported(
+                    "charging status",
+                    self.profile.name,
+                ))
+            }
+        };
+        let mut report = RazerReport::new(
+            battery.command_class,
+            battery.get_charging_command_id,
+            vec![0u8; 2],
+        )?;
+        report.transaction_id = transaction_id;
+        let resp = self.transact(&report)?;
+        Ok(*resp.arguments.get(1).unwrap_or(&0) != 0)
+    }
 }

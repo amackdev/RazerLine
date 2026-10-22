@@ -348,6 +348,14 @@ fn dispatch(
             let s = dev.get_serial().map_err(|e| e.to_string())?;
             write_out(out_ptr, out_cap, s.as_bytes())
         }
+        Op::GetBatteryLevel => {
+            let percent = dev.get_battery_level().map_err(|e| e.to_string())?;
+            write_out(out_ptr, out_cap, &[percent])
+        }
+        Op::GetChargingStatus => {
+            let charging = dev.get_charging_status().map_err(|e| e.to_string())?;
+            write_out(out_ptr, out_cap, &[charging as u8])
+        }
     }
 }
 
@@ -376,6 +384,8 @@ fn decode_op(raw: u32) -> Result<Op, String> {
         Op::SetMatrixWave,
         Op::GetFirmwareVersion,
         Op::GetSerial,
+        Op::GetBatteryLevel,
+        Op::GetChargingStatus,
     ];
     ALL.iter()
         .copied()

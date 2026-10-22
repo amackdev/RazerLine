@@ -109,6 +109,39 @@ pub struct MatrixProfile {
     pub effect_led_id: Option<u8>,
 }
 
+/// How a device reports whether it's currently charging, alongside its
+/// battery level. OpenRazer's kernel driver (`razermouse_driver.c`) keys
+/// this per USB product id, and not every wireless mouse falls in the
+/// same bucket as its battery-level query:
+#[derive(Debug, Clone, Copy)]
+pub enum ChargingStatusSupport {
+    /// Queries the device, same command class as battery level, with its
+    /// own (possibly different) transaction id.
+    Supported { transaction_id: u8 },
+    /// Primary (e.g. AA) battery, no onboard charging circuit — OpenRazer
+    /// always reports "not charging" here without touching the hardware
+    /// at all. [`crate::device::RazerDevice::get_charging_status`] (in
+    /// `razer-hid-core`) mirrors that: `Ok(false)` with no HID round trip.
+    NotApplicable,
+    /// This exact model has a battery-level query but no charging-status
+    /// command at all in the reference driver (e.g. the Basilisk V3 35K).
+    Unsupported,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct BatteryProfile {
+    pub command_class: u8,
+    pub get_level_command_id: u8,
+    pub get_charging_command_id: u8,
+    /// Transaction id for the battery-*level* query specifically — check
+    /// per-command against the real source, same caveat as
+    /// [`DpiProfile::transaction_id`]: this is not guaranteed to match
+    /// [`ChargingStatusSupport::Supported`]'s transaction id even though
+    /// it happens to for every model confirmed so far.
+    pub transaction_id: u8,
+    pub charging_status: ChargingStatusSupport,
+}
+
 /// Everything the control library needs to know about one device model.
 #[derive(Debug, Clone, Copy)]
 pub struct DeviceProfile {
@@ -125,6 +158,9 @@ pub struct DeviceProfile {
     pub leds: &'static [LedZoneProfile],
     pub matrix: Option<MatrixProfile>,
     pub identity: Option<IdentityProfile>,
+    /// `None` for wired-only devices with no onboard battery — only
+    /// wireless/dock-chargeable models answer this command at all.
+    pub battery: Option<BatteryProfile>,
     /// Effects confirmed to be rejected outright for every zone/matrix on
     /// this device (e.g. Basilisk V3 rejects Breathing and Off). Lets the
     /// GUI hide those controls instead of surfacing a firmware error.

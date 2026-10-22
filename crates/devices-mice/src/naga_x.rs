@@ -75,5 +75,6 @@ pub const NAGA_X: DeviceProfile = DeviceProfile {
         firmware_transaction_id: 0x1F,
         serial_transaction_id: 0x08,
     }),
+    battery: None,
     unsupported_led_effects: &[],
 };

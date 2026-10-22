@@ -8,9 +8,12 @@
 //! hardware by any maintainer of this repo** — if you own this device,
 //! please report what did/didn't work.
 
-use razer_hid_abi::commands::{CommandClass, GeneralCommand, MouseCommand};
+use razer_hid_abi::commands::{CommandClass, GeneralCommand, MiscCommand, MouseCommand};
 use razer_hid_abi::constants::RAZER_VENDOR_ID;
-use razer_hid_abi::{Confidence, DeviceKind, DeviceProfile, DpiProfile, IdentityProfile};
+use razer_hid_abi::{
+    BatteryProfile, ChargingStatusSupport, Confidence, DeviceKind, DeviceProfile, DpiProfile,
+    IdentityProfile,
+};
 
 pub const VIPER_MINI_SE_WIRED: DeviceProfile = DeviceProfile {
     name: "Razer Viper Mini SE (Wired)",
@@ -35,6 +38,15 @@ pub const VIPER_MINI_SE_WIRED: DeviceProfile = DeviceProfile {
         serial_command_id: GeneralCommand::GetSerial as u8,
         firmware_transaction_id: 0x1F,
         serial_transaction_id: 0x1F,
+    }),
+    battery: Some(BatteryProfile {
+        command_class: CommandClass::Misc as u8,
+        get_level_command_id: MiscCommand::GetBatteryLevel as u8,
+        get_charging_command_id: MiscCommand::GetChargingStatus as u8,
+        transaction_id: 0x1F,
+        charging_status: ChargingStatusSupport::Supported {
+            transaction_id: 0x1F,
+        },
     }),
     unsupported_led_effects: &[],
 };

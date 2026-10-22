@@ -20,12 +20,12 @@
 //! separate `matrix` capability is modeled here.
 
 use razer_hid_abi::commands::{
-    CommandClass, CommonLedId, GeneralCommand, LedCommand, MouseCommand,
+    CommandClass, CommonLedId, GeneralCommand, LedCommand, MiscCommand, MouseCommand,
 };
 use razer_hid_abi::constants::RAZER_VENDOR_ID;
 use razer_hid_abi::{
-    Confidence, DeviceKind, DeviceProfile, DpiProfile, IdentityProfile, LedZoneProfile,
-    PollRateProfile,
+    BatteryProfile, ChargingStatusSupport, Confidence, DeviceKind, DeviceProfile, DpiProfile,
+    IdentityProfile, LedZoneProfile, PollRateProfile,
 };
 
 const GENERAL_TRANSACTION_ID: u8 = 0xFF;
@@ -69,6 +69,15 @@ const fn profile(name: &'static str, product_id: u16) -> DeviceProfile {
             serial_command_id: GeneralCommand::GetSerial as u8,
             firmware_transaction_id: GENERAL_TRANSACTION_ID,
             serial_transaction_id: GENERAL_TRANSACTION_ID,
+        }),
+        battery: Some(BatteryProfile {
+            command_class: CommandClass::Misc as u8,
+            get_level_command_id: MiscCommand::GetBatteryLevel as u8,
+            get_charging_command_id: MiscCommand::GetChargingStatus as u8,
+            transaction_id: GENERAL_TRANSACTION_ID,
+            charging_status: ChargingStatusSupport::Supported {
+                transaction_id: GENERAL_TRANSACTION_ID,
+            },
         }),
         unsupported_led_effects: &[],
     }

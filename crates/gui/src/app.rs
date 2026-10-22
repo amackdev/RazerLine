@@ -46,6 +46,8 @@ use crate::widgets::{self, PreviewKind};
 /// being plugged in.
 const SCAN_INTERVAL: Duration = Duration::from_millis(1000);
 const DPI_POLL_INTERVAL: Duration = Duration::from_millis(400);
+/// How often to re-check battery level/charging status from hardware.
+const BATTERY_POLL_INTERVAL: Duration = Duration::from_secs(2);
 
 #[derive(Clone)]
 pub struct DpiRuntimeState {
@@ -314,6 +316,12 @@ pub struct GuiApp {
     status: String,
     status_is_error: bool,
 
+    // Battery (wireless/dock-chargeable devices only — `None` for both
+    // when the active device doesn't report one at all)
+    battery_percent: Option<u8>,
+    battery_charging: Option<bool>,
+    last_battery_poll: Instant,
+
     // Active Navigation Tab
     active_tab: ActiveTab,
 
@@ -365,6 +373,9 @@ impl GuiApp {
             last_scan: Instant::now(),
             status: "Scanning for devices...".to_string(),
             status_is_error: false,
+            battery_percent: None,
+            battery_charging: None,
+            last_battery_poll: Instant::now(),
             active_tab: ActiveTab::Customize,
             mouse_3d: Mouse3dView::default(),
             selected_button: Some(MouseButtonId::MiddleClick),
@@ -392,7 +403,34 @@ impl GuiApp {
             app.input_hook.update_mappings(prof.button_mappings.clone());
             crate::input_hook::update_active_mappings(prof.button_mappings.clone());
         }
+        app.poll_battery();
         app
+    }
+
+    /// Refreshes `battery_percent`/`battery_charging` from hardware.
+    /// `None` for devices with no [`DeviceProfile::battery`] at all (most
+    /// wired-only mice), as opposed to a query that failed, which leaves
+    /// the previous reading in place rather than flashing the indicator
+    /// away over one transient HID error.
+    fn poll_battery(&mut self) {
+        self.last_battery_poll = Instant::now();
+        let dev_guard = self.runtime_state.device.lock().unwrap();
+        let Some(dev) = dev_guard.as_ref() else {
+            self.battery_percent = None;
+            self.battery_charging = None;
+            return;
+        };
+        if dev.profile.battery.is_none() {
+            self.battery_percent = None;
+            self.battery_charging = None;
+            return;
+        }
+        if let Ok(percent) = dev.get_battery_level() {
+            self.battery_percent = Some(percent);
+        }
+        if let Ok(charging) = dev.get_charging_status() {
+            self.battery_charging = Some(charging);
+        }
     }
 
     pub fn active_device_profile(&self) -> Option<&'static DeviceProfile> {
@@ -429,6 +467,8 @@ impl GuiApp {
             *self.runtime_state.device.lock().unwrap() = None;
             self.runtime_state.active_pid.store(0, Ordering::SeqCst);
             self.active_pid = None;
+            self.battery_percent = None;
+            self.battery_charging = None;
             match self.connected.first().copied() {
                 Some(profile) => self.open(profile),
                 None => self.set_status("No device connected", false),
@@ -471,11 +511,15 @@ impl GuiApp {
 
                 // Apply active profile
                 self.apply_user_profile(&active_prof, profile);
+
+                self.poll_battery();
             }
             Err(e) => {
                 *self.runtime_state.device.lock().unwrap() = None;
                 self.runtime_state.active_pid.store(0, Ordering::SeqCst);
                 self.active_pid = None;
+                self.battery_percent = None;
+                self.battery_charging = None;
                 self.set_status(format!("Couldn't open {}: {e}", profile.name), true);
             }
         }
@@ -1173,6 +1217,10 @@ impl eframe::App for GuiApp {
         // Sync DPI, stage index, and active profile updated by the background worker
         self.sync_from_background();
 
+        if self.last_battery_poll.elapsed() >= BATTERY_POLL_INTERVAL {
+            self.poll_battery();
+        }
+
         static EGUI_CTX: std::sync::OnceLock<egui::Context> = std::sync::OnceLock::new();
         if EGUI_CTX.get().is_none() {
             let _ = EGUI_CTX.set(ctx.clone());
@@ -1300,6 +1348,21 @@ impl GuiApp {
 
             // Right-aligned Profile Quick Switcher & Device Badge
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                // Battery — always the rightmost item when the active
+                // device reports one, so it stays visible regardless of
+                // which tab/profile is selected.
+                if let Some(percent) = self.battery_percent {
+                    let charging = self.battery_charging.unwrap_or(false);
+                    ui.label(
+                        egui::RichText::new(format!("{percent}%"))
+                            .small()
+                            .color(theme::MUTED),
+                    );
+                    ui.add_space(4.0);
+                    widgets::battery_badge(ui, percent, charging);
+                    ui.add_space(14.0);
+                }
+
                 if let Some(pid) = self.active_pid {
                     let dev_entry = self.config.devices.entry(pid).or_default();
                     let prof_cfg = dev_entry.ensure_profiles();

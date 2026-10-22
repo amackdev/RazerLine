@@ -117,4 +117,24 @@ pub const YOUR_DEVICE: DeviceProfile = DeviceProfile {
         firmware_transaction_id: TRANSACTION_ID,
         serial_transaction_id: TRANSACTION_ID,
     }),
+
+    // Only wireless/dock-chargeable devices have this. Grep OpenRazer's
+    // `razer_attr_read_charge_level`/`razer_attr_read_charge_status` in
+    // `razermouse_driver.c` for your PID in *both* switch statements —
+    // they don't always agree (some models answer charge_level but have
+    // no charge_status case at all, and AA-battery models hardcode
+    // charge_status to "0" without a transaction id). See
+    // `ChargingStatusSupport`'s doc comment for the three outcomes.
+    //
+    // battery: Some(BatteryProfile {
+    //     command_class: CommandClass::Misc as u8,
+    //     get_level_command_id: MiscCommand::GetBatteryLevel as u8,
+    //     get_charging_command_id: MiscCommand::GetChargingStatus as u8,
+    //     transaction_id: TRANSACTION_ID,
+    //     charging_status: ChargingStatusSupport::Supported {
+    //         transaction_id: TRANSACTION_ID,
+    //     },
+    // }),
+    battery: None,
+    unsupported_led_effects: &[],
 };

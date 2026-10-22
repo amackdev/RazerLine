@@ -58,4 +58,8 @@ pub enum Op {
     GetFirmwareVersion = 22,
     /// in: none. out: UTF-8 bytes of the serial string.
     GetSerial = 23,
+    /// in: none. out: percent:u8 (1 byte, 0-100).
+    GetBatteryLevel = 24,
+    /// in: none. out: charging:u8 (1 byte, 0 or 1).
+    GetChargingStatus = 25,
 }

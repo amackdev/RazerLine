@@ -394,4 +394,18 @@ impl RazerDevice {
     pub fn get_serial(&self) -> Result<String, ClientError> {
         self.call_str(Op::GetSerial)
     }
+
+    /// Battery charge, 0-100%. Only wireless/dock-chargeable devices
+    /// support this — see [`DeviceProfile::battery`](razer_hid_abi::DeviceProfile::battery).
+    pub fn get_battery_level(&self) -> Result<u8, ClientError> {
+        let out = self.call(Op::GetBatteryLevel, &[])?;
+        Ok(out[0])
+    }
+
+    /// Whether the device is currently charging. `Ok(false)` for devices
+    /// that run on a primary (e.g. AA) battery with no charging circuit.
+    pub fn get_charging_status(&self) -> Result<bool, ClientError> {
+        let out = self.call(Op::GetChargingStatus, &[])?;
+        Ok(out[0] != 0)
+    }
 }

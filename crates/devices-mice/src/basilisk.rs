@@ -75,5 +75,6 @@ pub const BASILISK: DeviceProfile = DeviceProfile {
         firmware_transaction_id: 0x3F,
         serial_transaction_id: 0x3F,
     }),
+    battery: None,
     unsupported_led_effects: &[],
 };

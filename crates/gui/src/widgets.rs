@@ -15,6 +15,54 @@ pub fn status_dot(ui: &mut Ui, connected: bool) {
     ui.painter().circle_filled(rect.center(), 4.0, color);
 }
 
+/// A small battery icon, color-coded by charge level (muted/low →
+/// accent-green/full) and outlined in the accent color while charging.
+/// Hand-painted rather than an emoji/icon-font glyph — this project has
+/// already hit missing-glyph tofu boxes once (see the typography
+/// fallback fix), and a battery indicator that's supposed to always be
+/// visible is the wrong place to risk that again.
+pub fn battery_badge(ui: &mut Ui, percent: u8, charging: bool) {
+    let body_size = egui::vec2(18.0, 9.0);
+    let nub_size = egui::vec2(2.0, 4.0);
+    let (rect, _) = ui.allocate_exact_size(
+        egui::vec2(body_size.x + nub_size.x + 2.0, body_size.y),
+        egui::Sense::hover(),
+    );
+    let painter = ui.painter();
+
+    let body = egui::Rect::from_min_size(rect.min, body_size);
+    let nub = egui::Rect::from_min_size(
+        egui::pos2(body.max.x + 2.0, rect.center().y - nub_size.y / 2.0),
+        nub_size,
+    );
+
+    let outline_color = if charging {
+        theme::ACCENT
+    } else {
+        Color32::from_white_alpha(90)
+    };
+    painter.rect_stroke(body, 2.0, egui::Stroke::new(1.2, outline_color));
+    painter.rect_filled(nub, 1.0, outline_color);
+
+    let fill_color = if percent <= 15 {
+        theme::DANGER
+    } else if percent <= 35 {
+        Color32::from_rgb(224, 170, 64)
+    } else {
+        theme::SUCCESS
+    };
+    let inset = 1.5;
+    let max_fill_w = body_size.x - inset * 2.0;
+    let fill_w = max_fill_w * (percent.min(100) as f32 / 100.0);
+    if fill_w > 0.5 {
+        let fill_rect = egui::Rect::from_min_size(
+            body.min + egui::vec2(inset, inset),
+            egui::vec2(fill_w, body_size.y - inset * 2.0),
+        );
+        painter.rect_filled(fill_rect, 1.0, fill_color);
+    }
+}
+
 /// A small rounded color sample with a faint border, for showing the
 /// currently selected LED color next to its picker.
 pub fn color_swatch(ui: &mut Ui, rgb: [u8; 3], size: f32) {

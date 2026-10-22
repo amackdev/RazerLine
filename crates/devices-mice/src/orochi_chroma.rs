@@ -44,5 +44,6 @@ pub const OROCHI_CHROMA: DeviceProfile = DeviceProfile {
         firmware_transaction_id: 0xFF,
         serial_transaction_id: 0xFF,
     }),
+    battery: None,
     unsupported_led_effects: &[],
 };

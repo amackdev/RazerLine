@@ -91,5 +91,6 @@ pub const MAMBA_ELITE: DeviceProfile = DeviceProfile {
         firmware_transaction_id: 0x1F,
         serial_transaction_id: 0xFF,
     }),
+    battery: None,
     unsupported_led_effects: &[],
 };

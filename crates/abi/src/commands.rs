@@ -11,6 +11,12 @@ pub enum CommandClass {
     General = 0x00,
     Mouse = 0x04,
     Led = 0x0F,
+    /// OpenRazer's own naming for this class is informal — every function
+    /// using it is prefixed `razer_chroma_misc_*` in
+    /// `razerchromacommon.c` (battery/charging queries, dock charge
+    /// effect, ...), so `Misc` matches upstream rather than inventing a
+    /// more specific name no source comment actually uses.
+    Misc = 0x07,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,6 +33,17 @@ pub enum GeneralCommand {
 pub enum MouseCommand {
     SetDpiXY = 0x05,
     GetDpiXY = 0x85,
+}
+
+/// `razer_chroma_misc_get_battery_level`/`_get_charging_status` in
+/// OpenRazer's `razerchromacommon.c` — both take a 2-byte argument
+/// (unused/zeroed) and return their answer in `response.arguments[1]`:
+/// battery level as a raw 0-255 byte, charging status as 0/1.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum MiscCommand {
+    GetBatteryLevel = 0x80,
+    GetChargingStatus = 0x84,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

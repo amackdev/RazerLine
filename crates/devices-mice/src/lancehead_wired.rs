@@ -9,12 +9,12 @@
 //! please report what did/didn't work.
 
 use razer_hid_abi::commands::{
-    CommandClass, CommonLedId, GeneralCommand, LedCommand, MouseCommand,
+    CommandClass, CommonLedId, GeneralCommand, LedCommand, MiscCommand, MouseCommand,
 };
 use razer_hid_abi::constants::RAZER_VENDOR_ID;
 use razer_hid_abi::{
-    Confidence, DeviceKind, DeviceProfile, DpiProfile, IdentityProfile, LedZoneProfile,
-    MatrixPacketLength, MatrixProfile, PollRateProfile,
+    BatteryProfile, ChargingStatusSupport, Confidence, DeviceKind, DeviceProfile, DpiProfile,
+    IdentityProfile, LedZoneProfile, MatrixPacketLength, MatrixProfile, PollRateProfile,
 };
 
 pub const LANCEHEAD_WIRED: DeviceProfile = DeviceProfile {
@@ -90,6 +90,15 @@ pub const LANCEHEAD_WIRED: DeviceProfile = DeviceProfile {
         serial_command_id: GeneralCommand::GetSerial as u8,
         firmware_transaction_id: 0x3F,
         serial_transaction_id: 0x3F,
+    }),
+    battery: Some(BatteryProfile {
+        command_class: CommandClass::Misc as u8,
+        get_level_command_id: MiscCommand::GetBatteryLevel as u8,
+        get_charging_command_id: MiscCommand::GetChargingStatus as u8,
+        transaction_id: 0x3F,
+        charging_status: ChargingStatusSupport::Supported {
+            transaction_id: 0x3F,
+        },
     }),
     unsupported_led_effects: &[],
 };
