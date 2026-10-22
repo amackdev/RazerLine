@@ -13,6 +13,7 @@ import LightingCard from "../lib/components/LightingCard.svelte";
 import MatrixCard from "../lib/components/MatrixCard.svelte";
 import ProfilesCard from "../lib/components/ProfilesCard.svelte";
 import CustomizeCard from "../lib/components/CustomizeCard.svelte";
+import SettingsCard from "../lib/components/SettingsCard.svelte";
 
 	import { device, refreshActiveDevice, startDeviceListeners } from "../lib/state/device.svelte";
 	import { refreshDpi, startDpiListeners } from "../lib/state/dpi.svelte";
@@ -34,6 +35,7 @@ import CustomizeCard from "../lib/components/CustomizeCard.svelte";
 		{ id: "lighting", label: "LIGHTING" },
 		{ id: "profiles", label: "PROFILES" },
 		{ id: "customize", label: "CUSTOMIZE" },
+		{ id: "settings", label: "SETTINGS" },
 	];
 	let activeTab = $state("performance");
 </script>
@@ -90,6 +92,8 @@ import CustomizeCard from "../lib/components/CustomizeCard.svelte";
 						<ProfilesCard delay={0} />
 					{:else if activeTab === "customize"}
 						<CustomizeCard delay={0} />
+					{:else if activeTab === "settings"}
+						<SettingsCard delay={0} />
 					{/if}
 				</div>
 			{/key}
