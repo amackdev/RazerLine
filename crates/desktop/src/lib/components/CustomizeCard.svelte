@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { onMount } from "svelte";
-	import { fade, fly } from "svelte/transition";
+	import { fly } from "svelte/transition";
 	import MouseDiagram from "./MouseDiagram.svelte";
-	import ButtonMappingGrid from "./ButtonMappingGrid.svelte";
 	import ActionPickerModal from "./ActionPickerModal.svelte";
 	import { device } from "$lib/state/device.svelte";
 	import { buttonMapping } from "$lib/state/buttonMapping.svelte";
@@ -85,16 +84,17 @@
 <div class="customize-card" in:fly={{ y: 8, duration: 280, delay }}>
 	<div class="card-header">
 		<div class="header-left">
-			<h3>CUSTOMIZE</h3>
-			<p class="subtitle">Click any button on the mouse or in the list to reassign its function</p>
+			<h3>BUTTON ASSIGNMENTS</h3>
+			<p class="subtitle">Click any button pin on the mouse chassis to reassign its function</p>
 		</div>
 		<div class="header-actions">
-			{#if device.info}
-				<span class="device-badge">
-					<span class="badge-dot"></span>
-					{device.info.name}
-				</span>
-			{/if}
+			<button class="btn btn-ghost btn-sm" onclick={handleReset} title="Reset all button mappings to factory defaults">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+					<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+					<path d="M3 3v5h5" />
+				</svg>
+				Reset Defaults
+			</button>
 		</div>
 	</div>
 
@@ -123,35 +123,16 @@
 		</div>
 	</div>
 
-	<div class="customize-content">
-		<!-- Left: Interactive Mouse Diagram (Spacious and Centered) -->
-		<div class="diagram-pane">
-			<MouseDiagram
-				src={currentSvgSrc}
-				{selectedButton}
-				mappings={buttonMapping.mappings}
-				onSelect={handleSelect}
-				viewMode={activeTab}
-			/>
-		</div>
-
-		<!-- Right: Clean Button Mapping Grid -->
-		<div class="grid-pane">
-			<ButtonMappingGrid
-				mappings={buttonMapping.mappings}
-				{selectedButton}
-				onSelect={handleSelect}
-				onReset={handleReset}
-			/>
-		</div>
+	<!-- Interactive Mouse Diagram (Front, Center, and Full Width) -->
+	<div class="diagram-container">
+		<MouseDiagram
+			src={currentSvgSrc}
+			{selectedButton}
+			mappings={buttonMapping.mappings}
+			onSelect={handleSelect}
+			viewMode={activeTab}
+		/>
 	</div>
-
-	<!-- No device state -->
-	{#if !device.checked}
-		<div class="status" in:fade={{ duration: 200 }}>Looking for a device…</div>
-	{:else if !device.info}
-		<div class="status" in:fade={{ duration: 200 }}>No Razer device connected</div>
-	{/if}
 
 	<!-- Pop-up Function Assignment Modal -->
 	<ActionPickerModal
@@ -165,23 +146,26 @@
 
 <style>
 	.customize-card {
+		background: var(--card);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		padding: 20px;
 		display: flex;
 		flex-direction: column;
-		height: 100%;
-		gap: 12px;
+		gap: 14px;
 	}
 
 	.card-header {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding-bottom: 8px;
-		border-bottom: 1px solid #1f2229;
+		padding-bottom: 10px;
+		border-bottom: 1px solid #232731;
 	}
 
 	.header-left h3 {
 		margin: 0;
-		font-size: 14px;
+		font-size: 13px;
 		font-weight: 700;
 		letter-spacing: 0.5px;
 		color: #ffffff;
@@ -194,31 +178,10 @@
 		color: #8d9098;
 	}
 
-	.device-badge {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		padding: 4px 10px;
-		border-radius: 6px;
-		background: #15181d;
-		border: 1px solid #232731;
-		font-size: 11px;
-		font-weight: 600;
-		color: #d1d5db;
-	}
-
-	.badge-dot {
-		width: 6px;
-		height: 6px;
-		border-radius: 50%;
-		background: #40d180;
-		box-shadow: 0 0 8px #40d180;
-	}
-
 	.view-tabs-container {
 		display: flex;
 		justify-content: center;
-		margin-bottom: 4px;
+		margin: 2px 0;
 	}
 
 	.view-tabs {
@@ -234,7 +197,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 8px;
-		padding: 6px 18px;
+		padding: 6px 20px;
 		background: transparent;
 		border: 1px solid transparent;
 		border-radius: 6px;
@@ -259,44 +222,14 @@
 		box-shadow: 0 2px 8px rgba(64, 209, 128, 0.35);
 	}
 
-	.customize-content {
-		display: grid;
-		grid-template-columns: 1.3fr 1fr;
-		gap: 20px;
-		flex: 1;
-		min-height: 0;
-		align-items: start;
-	}
-
-	.diagram-pane {
-		min-width: 0;
+	.diagram-container {
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		background: #111317;
 		border: 1px solid #1f232c;
 		border-radius: 14px;
 		padding: 16px;
 		box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.3);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.grid-pane {
-		min-width: 0;
-		overflow-y: auto;
-		background: #111317;
-		border: 1px solid #1f232c;
-		border-radius: 14px;
-		padding: 16px;
-		box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.3);
-	}
-
-	.status {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		height: 100%;
-		color: var(--muted);
-		font-size: 13px;
-		grid-column: 1 / -1;
 	}
 </style>

@@ -35,13 +35,12 @@ import SettingsCard from "../lib/components/SettingsCard.svelte";
 	});
 
 	const tabs = [
-		{ id: "performance", label: "PERFORMANCE" },
+		{ id: "mouse_config", label: "MOUSE CONFIGURATION" },
 		{ id: "lighting", label: "LIGHTING" },
 		{ id: "profiles", label: "PROFILES" },
-		{ id: "customize", label: "CUSTOMIZE" },
 		{ id: "settings", label: "SETTINGS" },
 	];
-	let activeTab = $state("performance");
+	let activeTab = $state("mouse_config");
 </script>
 
 <div class="app">
@@ -58,12 +57,13 @@ import SettingsCard from "../lib/components/SettingsCard.svelte";
 		{:else}
 			{#key `${device.info.product_id}-${activeTab}`}
 				<div class="grid" in:fly={{ y: 8, duration: 280, opacity: 0 }}>
-					{#if activeTab === "performance"}
+					{#if activeTab === "mouse_config"}
+						<CustomizeCard delay={0} />
 						{#if device.info.dpi_min !== null && device.info.dpi_max !== null}
-							<DpiCard min={device.info.dpi_min} max={device.info.dpi_max} delay={0} />
+							<DpiCard min={device.info.dpi_min} max={device.info.dpi_max} delay={60} />
 						{/if}
 						{#if device.info.supported_poll_hz.length > 0}
-							<PollRateCard supportedHz={device.info.supported_poll_hz} delay={60} />
+							<PollRateCard supportedHz={device.info.supported_poll_hz} delay={120} />
 						{/if}
 						{#if device.info.has_battery || device.info.has_low_battery_threshold}
 							<PowerCard
@@ -71,11 +71,11 @@ import SettingsCard from "../lib/components/SettingsCard.svelte";
 								idleMinSeconds={device.info.idle_min_seconds}
 								idleMaxSeconds={device.info.idle_max_seconds}
 								hasLowBatteryThreshold={device.info.has_low_battery_threshold}
-								delay={120}
+								delay={180}
 							/>
 						{/if}
 						{#if device.info.has_identity}
-							<InfoCard delay={180} />
+							<InfoCard delay={240} />
 						{/if}
 					{:else if activeTab === "lighting"}
 						{#if device.info.led_zones.length > 0}
@@ -94,8 +94,6 @@ import SettingsCard from "../lib/components/SettingsCard.svelte";
 						{/if}
 					{:else if activeTab === "profiles"}
 						<ProfilesCard delay={0} />
-					{:else if activeTab === "customize"}
-						<CustomizeCard delay={0} />
 					{:else if activeTab === "settings"}
 						<SettingsCard delay={0} />
 					{/if}
@@ -119,8 +117,11 @@ import SettingsCard from "../lib/components/SettingsCard.svelte";
 	}
 
 	.grid {
-		max-width: 640px;
+		max-width: 760px;
 		margin: 0 auto;
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
 	}
 
 	.status {
