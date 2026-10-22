@@ -4,8 +4,6 @@
 	import { profile as profileState } from "$lib/state/profiles.svelte";
 	import { device } from "$lib/state/device.svelte";
 
-	let startWithWindows = $derived(profileState.config.start_with_windows);
-	let closeToTray = $derived(profileState.config.close_to_tray);
 	let configPath = $state("");
 
 	interface Props {
@@ -14,15 +12,15 @@
 
 	let { delay = 0 }: Props = $props();
 
-	async function toggleStartWithWindows() {
-		const newValue = !startWithWindows;
-		await profileState.setStartWithWindows(newValue);
+	async function toggleStartWithWindows(e: Event) {
+		const target = e.target as HTMLInputElement;
+		await profileState.setStartWithWindows(target.checked);
 		await profileState.saveConfig();
 	}
 
-	async function toggleCloseToTray() {
-		const newValue = !closeToTray;
-		await profileState.setCloseToTray(newValue);
+	async function toggleCloseToTray(e: Event) {
+		const target = e.target as HTMLInputElement;
+		await profileState.setCloseToTray(target.checked);
 		await profileState.saveConfig();
 	}
 
@@ -66,7 +64,7 @@
 					<span class="setting-desc">Launch RazerLine automatically on system startup</span>
 				</div>
 				<label class="toggle">
-					<input type="checkbox" bind:checked={startWithWindows} onchange={toggleStartWithWindows} />
+					<input type="checkbox" checked={profileState.config.start_with_windows} onchange={toggleStartWithWindows} />
 					<span class="toggle-slider"></span>
 				</label>
 			</div>
@@ -77,7 +75,7 @@
 					<span class="setting-desc">Clicking the window close button hides to system tray instead of exiting</span>
 				</div>
 				<label class="toggle">
-					<input type="checkbox" bind:checked={closeToTray} onchange={toggleCloseToTray} />
+					<input type="checkbox" checked={profileState.config.close_to_tray} onchange={toggleCloseToTray} />
 					<span class="toggle-slider"></span>
 				</label>
 			</div>

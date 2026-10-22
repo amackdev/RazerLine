@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 700" width="500" height="700">
+  <defs>
+    <radialGradient id="or_bot_glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#40D180" stop-opacity="0.20" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <ellipse cx="250" cy="355" rx="165" ry="215" fill="url(#or_bot_glow)" />
+
+  <path d="M 190,140 C 220,130 240,140 250,140 C 260,140 280,130 310,140 C 335,170 345,230 345,310 C 345,400 338,480 315,530 C 285,570 265,575 250,575 C 235,575 215,570 185,530 C 162,480 155,400 155,310 C 155,230 165,170 190,140 Z" 
+        fill="#141518" stroke="#2c2e36" stroke-width="2" />
+
+  <path d="M 190,155 Q 250,165 310,155 Q 300,175 250,175 Q 200,175 190,155 Z" fill="#ffffff" opacity="0.9" />
+
+  <!-- Sensor Ring -->
+  <rect x="220" y="325" width="60" height="70" rx="8" fill="#18191c" stroke="#353842" stroke-width="1.5" />
+  <circle cx="250" cy="360" r="10" fill="#080808" stroke="#40D180" stroke-width="1.8" />
+  <circle cx="250" cy="360" r="3.5" fill="#40D180" />
+
+  <!-- Wireless / Bluetooth / Off Switch -->
+  <rect x="295" y="350" width="12" height="22" rx="3" fill="#24262d" stroke="#3d404b" stroke-width="1" />
+  <rect x="296" y="351" width="10" height="9" rx="2" fill="#40D180" />
+
+  <path d="M 195,505 C 225,540 275,540 305,505 C 295,490 275,515 250,515 C 225,515 205,490 195,505 Z" fill="#ffffff" opacity="0.9" />
+</svg>

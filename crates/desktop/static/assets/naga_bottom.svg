@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 700" width="500" height="700">
+  <defs>
+    <radialGradient id="naga_bot_glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#40D180" stop-opacity="0.20" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <ellipse cx="250" cy="350" rx="195" ry="240" fill="url(#naga_bot_glow)" />
+
+  <path d="M 175,115 L 240,130 L 260,130 L 320,115 L 345,160 L 365,250 L 375,350 L 365,470 L 325,550 L 250,565 L 180,545 L 140,460 L 135,360 L 138,250 L 155,160 Z" 
+        fill="#141518" stroke="#2c2e36" stroke-width="2" />
+
+  <!-- Top Curved PTFE Skate -->
+  <path d="M 175,130 Q 250,150 325,130 Q 315,150 250,165 Q 185,150 175,130 Z" fill="#ffffff" opacity="0.9" />
+
+  <!-- Sensor Ring -->
+  <rect x="220" y="315" width="60" height="75" rx="8" fill="#18191c" stroke="#353842" stroke-width="1.5" />
+  <circle cx="250" cy="352" r="10" fill="#080808" stroke="#40D180" stroke-width="1.8" />
+  <circle cx="250" cy="352" r="3.5" fill="#40D180" />
+
+  <!-- Profile Switch Button on Bottom -->
+  <circle cx="205" cy="352" r="8" fill="#25272e" stroke="#40D180" stroke-width="1.5" />
+  <text x="205" y="377" fill="#8d9098" font-size="8" text-anchor="middle" font-family="sans-serif">PROFILE</text>
+
+  <!-- Large Bottom Glide Skate -->
+  <path d="M 180,510 C 215,550 285,550 320,510 C 310,490 285,520 250,520 C 215,520 190,490 180,510 Z" fill="#ffffff" opacity="0.9" />
+</svg>

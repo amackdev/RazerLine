@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 700" width="500" height="700">
+  <defs>
+    <radialGradient id="mb_bot_glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#40D180" stop-opacity="0.20" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <ellipse cx="250" cy="355" rx="185" ry="235" fill="url(#mb_bot_glow)" />
+
+  <path d="M 170,115 C 190,90 220,115 240,125 L 260,125 C 280,115 315,85 335,110 C 355,135 362,200 360,280 C 358,360 360,450 340,520 C 320,575 285,590 250,590 C 205,590 175,570 155,515 C 138,450 138,360 142,280 C 145,200 150,135 170,115 Z" 
+        fill="#141518" stroke="#2c2e36" stroke-width="2" />
+
+  <path d="M 175,130 Q 240,145 250,145 Q 240,165 185,155 Z" fill="#ffffff" opacity="0.9" />
+  <path d="M 325,130 Q 260,145 250,145 Q 260,165 315,155 Z" fill="#ffffff" opacity="0.9" />
+
+  <!-- Sensor Ring -->
+  <rect x="220" y="320" width="60" height="72" rx="8" fill="#18191c" stroke="#353842" stroke-width="1.5" />
+  <circle cx="250" cy="355" r="10" fill="#080808" stroke="#40D180" stroke-width="1.8" />
+  <circle cx="250" cy="355" r="3.5" fill="#40D180" />
+
+  <circle cx="205" cy="355" r="8" fill="#25272e" stroke="#40D180" stroke-width="1.5" />
+  <text x="205" y="380" fill="#8d9098" font-size="8" text-anchor="middle" font-family="sans-serif">PROFILE</text>
+
+  <path d="M 175,515 C 215,555 285,555 325,515 C 315,495 285,525 250,525 C 215,525 185,495 175,515 Z" fill="#ffffff" opacity="0.9" />
+</svg>

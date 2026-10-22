@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 700" width="500" height="700">
+  <defs>
+    <radialGradient id="cb_bot_glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#40D180" stop-opacity="0.20" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <ellipse cx="250" cy="350" rx="175" ry="225" fill="url(#cb_bot_glow)" />
+
+  <path d="M 180,120 L 240,135 L 260,135 L 320,120 L 338,180 L 340,270 L 330,360 L 325,460 L 290,535 L 250,548 L 210,535 L 175,460 L 170,360 L 160,270 L 162,180 Z" 
+        fill="#141518" stroke="#2c2e36" stroke-width="2" />
+
+  <!-- Top PTFE Skates -->
+  <path d="M 185,135 Q 240,150 250,150 Q 240,165 190,155 Z" fill="#ffffff" opacity="0.9" />
+  <path d="M 315,135 Q 260,150 250,150 Q 260,165 310,155 Z" fill="#ffffff" opacity="0.9" />
+
+  <!-- Sensor Ring -->
+  <rect x="220" y="315" width="60" height="70" rx="8" fill="#18191c" stroke="#353842" stroke-width="1.5" />
+  <circle cx="250" cy="350" r="10" fill="#080808" stroke="#40D180" stroke-width="1.8" />
+  <circle cx="250" cy="350" r="3.5" fill="#40D180" />
+
+  <!-- Profile Button on Bottom -->
+  <circle cx="205" cy="350" r="8" fill="#25272e" stroke="#40D180" stroke-width="1.5" />
+  <text x="205" y="375" fill="#8d9098" font-size="8" text-anchor="middle" font-family="sans-serif">PROFILE</text>
+
+  <!-- Bottom Rear PTFE Skate -->
+  <path d="M 185,490 C 220,530 280,530 315,490 C 305,475 280,505 250,505 C 220,505 195,475 185,490 Z" fill="#ffffff" opacity="0.9" />
+</svg>

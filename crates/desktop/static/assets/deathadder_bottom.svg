@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 700" width="500" height="700">
+  <defs>
+    <radialGradient id="da_bot_glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#40D180" stop-opacity="0.18" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="da_base" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#181a1f" />
+      <stop offset="100%" stop-color="#0e0f12" />
+    </linearGradient>
+  </defs>
+
+  <ellipse cx="250" cy="360" rx="190" ry="240" fill="url(#da_bot_glow)" />
+
+  <!-- Chassis Base Outer -->
+  <path d="M 160,110 C 180,85 220,110 240,120 L 260,120 C 285,110 325,75 350,95 C 370,125 375,200 370,280 C 365,360 368,440 348,510 C 330,570 295,595 250,595 C 200,595 165,565 148,505 C 132,445 130,360 132,280 C 135,200 142,130 160,110 Z" 
+        fill="url(#da_base)" stroke="#2b2d35" stroke-width="2" />
+
+  <!-- Top PTFE Glide Feet (Flared Left and Right) -->
+  <path d="M 175,130 Q 210,135 240,140 Q 235,160 185,155 Z" fill="#ffffff" opacity="0.85" rx="3" />
+  <path d="M 260,140 Q 290,135 325,125 Q 335,145 285,155 Z" fill="#ffffff" opacity="0.85" rx="3" />
+
+  <!-- Optical Sensor Ring & Sensor Aperture -->
+  <rect x="220" y="320" width="60" height="75" rx="10" fill="#141518" stroke="#32353e" stroke-width="1.5" />
+  <circle cx="250" cy="355" r="10" fill="#050505" stroke="#40D180" stroke-width="1.8" />
+  <circle cx="250" cy="355" r="4" fill="#40D180" />
+
+  <!-- Profile Switch / DPI Button on Bottom -->
+  <circle cx="205" cy="355" r="9" fill="#24262d" stroke="#40D180" stroke-width="1.5" />
+  <text x="205" y="380" fill="#8d9098" font-size="9" text-anchor="middle" font-family="sans-serif">PROFILE</text>
+
+  <!-- Power Switch Slider -->
+  <rect x="285" y="343" width="14" height="24" rx="4" fill="#24262d" stroke="#3d404b" stroke-width="1" />
+  <rect x="287" y="345" width="10" height="10" rx="2" fill="#40D180" />
+
+  <!-- Bottom Rear PTFE Skate -->
+  <path d="M 175,525 C 215,565 285,565 325,525 C 315,505 285,535 250,535 C 215,535 185,505 175,525 Z" fill="#ffffff" opacity="0.85" />
+</svg>

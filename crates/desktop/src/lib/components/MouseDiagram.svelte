@@ -1,7 +1,5 @@
-<script lang="ts" generics="T extends MouseButtonId">
-	import { onMount } from "svelte";
-	import { fade, fly } from "svelte/transition";
-	import { gsap } from "gsap";
+<script lang="ts">
+	import { fade } from "svelte/transition";
 	import type { MouseButtonId, ButtonAction } from "$lib/types/buttons";
 	import { MouseButtonId as MB } from "$lib/types/buttons";
 	import { buttonActionLabel } from "$lib/types/buttons";
@@ -13,301 +11,425 @@
 		selectedButton: MouseButtonId | null;
 		/** Current action for each button */
 		mappings: Record<string, ButtonAction>;
-		/** Callback when a button pin is clicked */
+		/** Callback when a button pin or callout is clicked */
 		onSelect: (button: MouseButtonId) => void;
 		/** View mode */
 		viewMode: "top" | "bottom";
+		/** Compact mode for dual side-by-side view */
+		compact?: boolean;
 	}
 
-	let { src, selectedButton, mappings, onSelect, viewMode }: Props = $props();
+	let { src, selectedButton, mappings, onSelect, viewMode, compact = false }: Props = $props();
 
-	// Hotspot positions for each device/chassis (normalized 0-1 coordinates)
-	// These match the SVG viewBox coordinates from the original mouse_3d.rs
-	const hotspots: Record<string, Record<string, { x: number; y: number; label: string; badgeX: number; badgeY: number }>> = {
+	interface Hotspot {
+		x: number; // percentage 0-100 across mouse width
+		y: number; // percentage 0-100 across mouse height
+		label: string;
+		side: "left" | "right";
+		badgeY: number; // percentage vertical anchor for the badge
+	}
+
+	// Hotspots for each chassis family (top and bottom views)
+	const hotspots: Record<string, Record<string, Hotspot>> = {
 		// Basilisk V3 Top View
 		"basilisk_v3-top": {
-			MiddleClick: { x: 0.5, y: 0.28, label: "Scroll Click", badgeX: 0.05, badgeY: 0.15 },
-			TiltLeft: { x: 0.47, y: 0.28, label: "Scroll Left", badgeX: 0.05, badgeY: 0.22 },
-			MultiFunctionClutch: { x: 0.34, y: 0.42, label: "Sensitivity Clutch", badgeX: 0.05, badgeY: 0.28 },
-			SideForward: { x: 0.39, y: 0.36, label: "Mouse Button 5", badgeX: 0.05, badgeY: 0.34 },
-			SideBack: { x: 0.39, y: 0.45, label: "Mouse Button 4", badgeX: 0.05, badgeY: 0.4 },
-			ProfileSwitch: { x: 0.39, y: 0.58, label: "Cycle Profile", badgeX: 0.05, badgeY: 0.46 },
-			ScrollUp: { x: 0.5, y: 0.24, label: "Scroll Up", badgeX: 0.95, badgeY: 0.15 },
-			TiltRight: { x: 0.53, y: 0.28, label: "Scroll Right", badgeX: 0.95, badgeY: 0.22 },
-			ScrollDown: { x: 0.5, y: 0.32, label: "Scroll Down", badgeX: 0.95, badgeY: 0.28 },
-			ScrollMode: { x: 0.5, y: 0.48, label: "Scroll Mode", badgeX: 0.95, badgeY: 0.34 },
-			DpiSwitch: { x: 0.5, y: 0.44, label: "Cycle Sensitivity", badgeX: 0.95, badgeY: 0.4 },
+			ScrollUp: { x: 50, y: 22, label: "Scroll Up", side: "right", badgeY: 14 },
+			MiddleClick: { x: 50, y: 27, label: "Scroll Click", side: "left", badgeY: 18 },
+			TiltLeft: { x: 44, y: 27, label: "Scroll Left", side: "left", badgeY: 26 },
+			TiltRight: { x: 56, y: 27, label: "Scroll Right", side: "right", badgeY: 22 },
+			ScrollDown: { x: 50, y: 32, label: "Scroll Down", side: "right", badgeY: 30 },
+			DpiSwitch: { x: 50, y: 41, label: "DPI Cycle", side: "right", badgeY: 38 },
+			ScrollMode: { x: 50, y: 47, label: "Scroll Mode", side: "right", badgeY: 46 },
+			SideForward: { x: 30, y: 35, label: "Mouse Button 5", side: "left", badgeY: 34 },
+			SideBack: { x: 30, y: 43, label: "Mouse Button 4", side: "left", badgeY: 42 },
+			MultiFunctionClutch: { x: 26, y: 50, label: "Sensitivity Clutch", side: "left", badgeY: 50 },
 		},
-		// Basilisk V3 Bottom View
 		"basilisk_v3-bottom": {
-			ProfileSwitch: { x: 0.42, y: 0.58, label: "Cycle Profile", badgeX: 0.05, badgeY: 0.46 },
+			ProfileSwitch: { x: 43, y: 58, label: "Cycle Profile", side: "left", badgeY: 58 },
 		},
+
 		// Viper Ultimate Top View
 		"viper_ultimate-top": {
-			MiddleClick: { x: 0.5, y: 0.28, label: "Scroll Click", badgeX: 0.05, badgeY: 0.15 },
-			SideForward: { x: 0.32, y: 0.36, label: "Mouse Button 5", badgeX: 0.05, badgeY: 0.22 },
-			SideBack: { x: 0.32, y: 0.43, label: "Mouse Button 4", badgeX: 0.05, badgeY: 0.28 },
-			DpiSwitch: { x: 0.5, y: 0.44, label: "DPI Cycle", badgeX: 0.95, badgeY: 0.34 },
-			ScrollUp: { x: 0.5, y: 0.24, label: "Scroll Up", badgeX: 0.95, badgeY: 0.15 },
-			ScrollDown: { x: 0.5, y: 0.32, label: "Scroll Down", badgeX: 0.95, badgeY: 0.28 },
+			ScrollUp: { x: 50, y: 22, label: "Scroll Up", side: "right", badgeY: 16 },
+			MiddleClick: { x: 50, y: 28, label: "Scroll Click", side: "left", badgeY: 20 },
+			ScrollDown: { x: 50, y: 34, label: "Scroll Down", side: "right", badgeY: 26 },
+			DpiSwitch: { x: 50, y: 44, label: "DPI Switch", side: "right", badgeY: 36 },
+			SideForward: { x: 32, y: 36, label: "Mouse Button 5", side: "left", badgeY: 34 },
+			SideBack: { x: 32, y: 44, label: "Mouse Button 4", side: "left", badgeY: 44 },
 		},
-		// Viper Ultimate Bottom View
 		"viper_ultimate-bottom": {
-			ProfileSwitch: { x: 0.42, y: 0.56, label: "Cycle Profile", badgeX: 0.05, badgeY: 0.46 },
+			ProfileSwitch: { x: 42, y: 56, label: "Cycle Profile", side: "left", badgeY: 56 },
 		},
-		// Generic Top View
+
+		// DeathAdder Top View
+		"deathadder-top": {
+			ScrollUp: { x: 50, y: 22, label: "Scroll Up", side: "right", badgeY: 16 },
+			MiddleClick: { x: 50, y: 27, label: "Scroll Click", side: "left", badgeY: 20 },
+			ScrollDown: { x: 50, y: 32, label: "Scroll Down", side: "right", badgeY: 26 },
+			DpiSwitch: { x: 50, y: 40, label: "DPI Up", side: "right", badgeY: 36 },
+			ScrollMode: { x: 50, y: 47, label: "DPI Down", side: "right", badgeY: 46 },
+			SideForward: { x: 28, y: 45, label: "Mouse Button 5", side: "left", badgeY: 38 },
+			SideBack: { x: 28, y: 55, label: "Mouse Button 4", side: "left", badgeY: 48 },
+		},
+		"deathadder-bottom": {
+			ProfileSwitch: { x: 41, y: 51, label: "Cycle Profile", side: "left", badgeY: 51 },
+		},
+
+		// Cobra Top View
+		"cobra-top": {
+			ScrollUp: { x: 50, y: 23, label: "Scroll Up", side: "right", badgeY: 16 },
+			MiddleClick: { x: 50, y: 28, label: "Scroll Click", side: "left", badgeY: 20 },
+			ScrollDown: { x: 50, y: 34, label: "Scroll Down", side: "right", badgeY: 26 },
+			DpiSwitch: { x: 50, y: 43, label: "DPI Cycle", side: "right", badgeY: 36 },
+			SideForward: { x: 33, y: 44, label: "Mouse Button 5", side: "left", badgeY: 38 },
+			SideBack: { x: 33, y: 52, label: "Mouse Button 4", side: "left", badgeY: 48 },
+		},
+		"cobra-bottom": {
+			ProfileSwitch: { x: 41, y: 50, label: "Cycle Profile", side: "left", badgeY: 50 },
+		},
+
+		// Naga Top View
+		"naga-top": {
+			ScrollUp: { x: 50, y: 23, label: "Scroll Up", side: "right", badgeY: 16 },
+			MiddleClick: { x: 50, y: 28, label: "Scroll Click", side: "left", badgeY: 20 },
+			TiltLeft: { x: 44, y: 28, label: "Scroll Left", side: "left", badgeY: 28 },
+			TiltRight: { x: 56, y: 28, label: "Scroll Right", side: "right", badgeY: 24 },
+			ScrollDown: { x: 50, y: 34, label: "Scroll Down", side: "right", badgeY: 32 },
+			DpiSwitch: { x: 50, y: 41, label: "DPI Up", side: "right", badgeY: 40 },
+			ScrollMode: { x: 50, y: 47, label: "DPI Down", side: "right", badgeY: 48 },
+			SideForward: { x: 28, y: 46, label: "Side Button 5", side: "left", badgeY: 42 },
+			SideBack: { x: 28, y: 54, label: "Side Button 4", side: "left", badgeY: 52 },
+		},
+		"naga-bottom": {
+			ProfileSwitch: { x: 41, y: 50, label: "Cycle Profile", side: "left", badgeY: 50 },
+		},
+
+		// Mamba Top View
+		"mamba-top": {
+			ScrollUp: { x: 50, y: 22, label: "Scroll Up", side: "right", badgeY: 16 },
+			MiddleClick: { x: 50, y: 27, label: "Scroll Click", side: "left", badgeY: 20 },
+			TiltLeft: { x: 44, y: 27, label: "Scroll Left", side: "left", badgeY: 28 },
+			TiltRight: { x: 56, y: 27, label: "Scroll Right", side: "right", badgeY: 24 },
+			ScrollDown: { x: 50, y: 32, label: "Scroll Down", side: "right", badgeY: 32 },
+			DpiSwitch: { x: 50, y: 40, label: "DPI Up", side: "right", badgeY: 40 },
+			ScrollMode: { x: 50, y: 46, label: "DPI Down", side: "right", badgeY: 48 },
+			SideForward: { x: 30, y: 45, label: "Mouse Button 5", side: "left", badgeY: 42 },
+			SideBack: { x: 30, y: 53, label: "Mouse Button 4", side: "left", badgeY: 52 },
+		},
+		"mamba-bottom": {
+			ProfileSwitch: { x: 41, y: 51, label: "Cycle Profile", side: "left", badgeY: 51 },
+		},
+
+		// Orochi Top View
+		"orochi-top": {
+			ScrollUp: { x: 50, y: 23, label: "Scroll Up", side: "right", badgeY: 16 },
+			MiddleClick: { x: 50, y: 28, label: "Scroll Click", side: "left", badgeY: 20 },
+			ScrollDown: { x: 50, y: 33, label: "Scroll Down", side: "right", badgeY: 26 },
+			DpiSwitch: { x: 50, y: 42, label: "DPI Button", side: "right", badgeY: 36 },
+			SideForward: { x: 32, y: 45, label: "Mouse Button 5", side: "left", badgeY: 40 },
+			SideBack: { x: 32, y: 52, label: "Mouse Button 4", side: "left", badgeY: 50 },
+		},
+		"orochi-bottom": {},
+
+		// Generic Fallback
 		"generic-top": {
-			MiddleClick: { x: 0.5, y: 0.28, label: "Scroll Click", badgeX: 0.05, badgeY: 0.15 },
-			SideForward: { x: 0.35, y: 0.38, label: "Button 5", badgeX: 0.05, badgeY: 0.22 },
-			SideBack: { x: 0.35, y: 0.45, label: "Button 4", badgeX: 0.05, badgeY: 0.28 },
-			DpiSwitch: { x: 0.5, y: 0.44, label: "DPI Cycle", badgeX: 0.95, badgeY: 0.34 },
+			ScrollUp: { x: 50, y: 22, label: "Scroll Up", side: "right", badgeY: 16 },
+			MiddleClick: { x: 50, y: 27, label: "Scroll Click", side: "left", badgeY: 20 },
+			ScrollDown: { x: 50, y: 32, label: "Scroll Down", side: "right", badgeY: 26 },
+			DpiSwitch: { x: 50, y: 42, label: "DPI Switch", side: "right", badgeY: 36 },
+			SideForward: { x: 31, y: 45, label: "Mouse Button 5", side: "left", badgeY: 40 },
+			SideBack: { x: 31, y: 53, label: "Mouse Button 4", side: "left", badgeY: 50 },
 		},
-		// Generic Bottom View (empty)
-		"generic-bottom": {},
+		"generic-bottom": {
+			ProfileSwitch: { x: 41, y: 50, label: "Cycle Profile", side: "left", badgeY: 50 },
+		},
 	};
 
-	let svgElement: HTMLDivElement | null = $state(null);
-	let containerRect: DOMRect | null = $state(null);
-
-	function updateContainerRect() {
-		if (svgElement) {
-			containerRect = svgElement.getBoundingClientRect();
-		}
-	}
-
-	onMount(() => {
-		updateContainerRect();
-		window.addEventListener("resize", updateContainerRect);
-		return () => window.removeEventListener("resize", updateContainerRect);
-	});
-
-	// Reactive key that updates when src or viewMode changes
-	let key = $derived(`${src.replace(/\.(svg|png)$/, "")}-${viewMode}`);
-	let deviceHotspots = $derived(hotspots[key] ?? {});
+	// Clean extraction of device key e.g. "viper_ultimate-top"
+	let baseName = $derived(
+		src
+			.split("/")
+			.pop()
+			?.replace(/(_bottom)?\.(svg|png)$/, "") ?? "generic"
+	);
+	let key = $derived(`${baseName}-${viewMode}`);
+	let deviceHotspots = $derived(hotspots[key] ?? hotspots[`generic-${viewMode}`] ?? {});
 
 	function getAction(button: MouseButtonId): ButtonAction {
 		return mappings[button] ?? MB.defaultAction(button);
 	}
-
-	function handlePinClick(button: MouseButtonId) {
-		onSelect(button);
-	}
-
-	function getBadgePosition(hotspot: { x: number; y: number; badgeX: number; badgeY: number }) {
-		if (!containerRect) return { x: 0, y: 0 };
-		return {
-			x: containerRect.left + containerRect.width * hotspot.badgeX,
-			y: containerRect.top + containerRect.height * hotspot.badgeY,
-		};
-	}
-
-	function getPinPosition(hotspot: { x: number; y: number }) {
-		if (!containerRect) return { x: 0, y: 0 };
-		return {
-			x: containerRect.left + containerRect.width * hotspot.x,
-			y: containerRect.top + containerRect.height * hotspot.y,
-		};
-	}
 </script>
 
-<div class="mouse-diagram" bind:this={svgElement}>
-	<!-- SVG Image -->
-	<img 
-		src={src} 
-		alt="Mouse diagram" 
-		class="mouse-svg"
-		onload={updateContainerRect}
-	/>
+<div class="mouse-stage" class:compact={compact}>
+	<!-- Ambient Backlight Stage -->
+	<div class="stage-backdrop"></div>
 
-	<!-- Hotspot Pins -->
-	{#each Object.entries(deviceHotspots) as [buttonId, hotspot]}
-		{#if buttonId !== "ProfileSwitch" || viewMode === "bottom"}
-			{#key `${buttonId}-${selectedButton}`}
-				<div
-					class="pin-container"
-					style="
-						left: calc({containerRect?.width ?? 0}px * {hotspot.x} + {containerRect?.left ?? 0}px);
-						top: calc({containerRect?.height ?? 0}px * {hotspot.y} + {containerRect?.top ?? 0}px);
-					"
-				>
-					<!-- Pin on mouse body -->
-					<button
-						class="pin {selectedButton === buttonId ? 'selected' : ''} {MB.isConfigurable(buttonId as MouseButtonId) ? '' : 'non-configurable'}"
-						onclick={() => handlePinClick(buttonId as MouseButtonId)}
-						style="--pin-color: {selectedButton === buttonId ? '#40D180' : '#3C404C'};"
-					>
-						<!-- Pulse ring for selected -->
-						{#if selectedButton === buttonId}
-							<div class="pin-pulse"></div>
-						{/if}
-					</button>
+	<!-- Central SVG Chassis -->
+	<div class="chassis-wrapper">
+		<img {src} alt="Mouse Chassis Diagram" class="mouse-svg" />
 
-					<!-- Badge/Callout -->
-					<div
-						class="pin-badge {selectedButton === buttonId ? 'active' : ''}"
-						style="
-							left: {getBadgePosition(hotspot).x}px;
-							top: {getBadgePosition(hotspot).y}px;
-						"
-					>
-						<div class="badge-content">
-							<div class="badge-label">{hotspot.label}</div>
-							<div class="badge-action">{buttonActionLabel(getAction(buttonId as MouseButtonId))}</div>
-						</div>
-						<!-- Leader line connecting badge to pin -->
-						<div
-							class="leader-line"
-							style="
-								--pin-x: {getPinPosition(hotspot).x}px;
-								--pin-y: {getPinPosition(hotspot).y}px;
-								--badge-x: {getBadgePosition(hotspot).x}px;
-								--badge-y: {getBadgePosition(hotspot).y}px;
-							"
-						>
-							<svg class="leader-svg" viewBox="0 0 200 100" preserveAspectRatio="none">
-								<path
-									d="M 0 50 Q 50 50 50 50 Q 50 50 100 50"
-									stroke="{selectedButton === buttonId ? '#40D180' : '#3C404C'}"
-									stroke-width="1.5"
-									fill="none"
-									vector-effect="non-scaling-stroke"
-								/>
-							</svg>
-						</div>
+		<!-- Interactive Hotspot Pins and Connected Callout Badges -->
+		{#each Object.entries(deviceHotspots) as [buttonId, hotspot]}
+			{@const isSelected = selectedButton === buttonId}
+			{@const btnId = buttonId as MouseButtonId}
+			{@const action = getAction(btnId)}
+
+			<!-- Hotspot Pin on the Mouse Surface -->
+			<button
+				class="mouse-pin"
+				class:selected={isSelected}
+				style="left: {hotspot.x}%; top: {hotspot.y}%;"
+				onclick={() => onSelect(btnId)}
+				title="Click to assign: {hotspot.label}"
+			>
+				{#if isSelected}
+					<span class="pin-halo"></span>
+				{/if}
+				<span class="pin-core"></span>
+			</button>
+
+			<!-- Callout Badge anchored to side -->
+			<!-- svelte-ignore a11y_click_events_have_key_events -->
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div
+				class="callout-card {hotspot.side}"
+				class:selected={isSelected}
+				style="top: {hotspot.badgeY}%;"
+				onclick={() => onSelect(btnId)}
+			>
+				<div class="callout-content">
+					<div class="callout-header">
+						<span class="callout-label">{hotspot.label}</span>
+						<span class="edit-hint">Click to change</span>
+					</div>
+					<div class="callout-action-pill">
+						<span class="pill-dot"></span>
+						<span class="pill-text">{buttonActionLabel(action)}</span>
 					</div>
 				</div>
-			{/key}
-		{/if}
-	{/each}
+			</div>
+		{/each}
+	</div>
 </div>
 
 <style>
-	.mouse-diagram {
+	.mouse-stage {
 		position: relative;
 		width: 100%;
-		max-width: 560px;
-		margin: 0 auto;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 20px 0;
+		min-height: 520px;
+	}
+
+	.stage-backdrop {
+		position: absolute;
+		inset: 20px;
+		background: radial-gradient(circle at 50% 50%, rgba(64, 209, 128, 0.08) 0%, rgba(15, 16, 18, 0) 70%);
+		pointer-events: none;
+		border-radius: 24px;
+	}
+
+	.chassis-wrapper {
+		position: relative;
+		width: 100%;
+		max-width: 540px;
+		height: auto;
+		display: flex;
+		justify-content: center;
+		user-select: none;
 	}
 
 	.mouse-svg {
 		display: block;
 		width: 100%;
+		max-width: 440px;
 		height: auto;
+		filter: drop-shadow(0 14px 35px rgba(0, 0, 0, 0.7));
 		pointer-events: none;
 	}
 
-	.pin-container {
+	/* Hotspot Pin on Mouse Body */
+	.mouse-pin {
 		position: absolute;
-		pointer-events: none;
-		z-index: 10;
-	}
-
-	.pin {
-		position: absolute;
-		width: 14px;
-		height: 14px;
+		width: 18px;
+		height: 18px;
 		border-radius: 50%;
-		background: var(--pin-color);
-		border: 2px solid var(--surface);
-		box-shadow: 0 0 0 2px var(--pin-color), 0 4px 12px rgba(0, 0, 0, 0.4);
+		background: transparent;
+		border: none;
+		padding: 0;
 		cursor: pointer;
 		transform: translate(-50%, -50%);
-		pointer-events: auto;
-		transition: transform 150ms, box-shadow 150ms;
-		z-index: 20;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 25;
+		transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1);
 	}
 
-	.pin:hover {
-		transform: translate(-50%, -50%) scale(1.2);
-		box-shadow: 0 0 0 3px var(--pin-color), 0 6px 20px rgba(0, 0, 0, 0.5);
+	.mouse-pin:hover {
+		transform: translate(-50%, -50%) scale(1.3);
 	}
 
-	.pin.selected {
-		animation: pinSelected 150ms ease-out;
-	}
-
-	.pin.non-configurable {
-		opacity: 0.4;
-		cursor: not-allowed;
-	}
-
-	.pin.non-configurable:hover {
-		transform: translate(-50%, -50%);
-	}
-
-	@keyframes pinSelected {
-		0% { transform: translate(-50%, -50%) scale(0.8); }
-		50% { transform: translate(-50%, -50%) scale(1.3); }
-		100% { transform: translate(-50%, -50%) scale(1); }
-	}
-
-	.pin-pulse {
-		position: absolute;
-		inset: -4px;
+	.pin-core {
+		width: 10px;
+		height: 10px;
 		border-radius: 50%;
-		border: 2px solid #40D180;
-		opacity: 0;
-		animation: pulse 2s ease-out infinite;
+		background: #40d180;
+		box-shadow: 0 0 10px #40d180, 0 0 20px rgba(64, 209, 128, 0.6);
+		border: 2px solid #14161a;
+		transition: all 150ms;
 	}
 
-	@keyframes pulse {
-		0% { transform: scale(1); opacity: 0.6; }
-		100% { transform: scale(1.5); opacity: 0; }
+	.mouse-pin:hover .pin-core,
+	.mouse-pin.selected .pin-core {
+		background: #ffffff;
+		box-shadow: 0 0 14px #40d180, 0 0 25px #40d180;
+		transform: scale(1.2);
 	}
 
-	.pin-badge {
+	.pin-halo {
 		position: absolute;
-		pointer-events: none;
-		transform: translateX(-50%);
-		z-index: 15;
-		opacity: 0;
-		transform: translateX(-50%) translateY(10px);
-		transition: opacity 200ms, transform 200ms;
+		inset: -6px;
+		border-radius: 50%;
+		border: 2px solid #40d180;
+		animation: haloPulse 1.8s infinite cubic-bezier(0.25, 0.8, 0.25, 1);
 	}
 
-	.pin-badge.active {
-		opacity: 1;
-		transform: translateX(-50%) translateY(0);
+	@keyframes haloPulse {
+		0% { transform: scale(0.8); opacity: 0.8; }
+		50% { transform: scale(1.6); opacity: 0; }
+		100% { transform: scale(0.8); opacity: 0; }
 	}
 
-	.badge-content {
-		background: var(--surface-elevated);
-		border: 1px solid var(--border);
-		border-radius: 8px;
+	/* Callout Badges Anchored to Sides */
+	.callout-card {
+		position: absolute;
+		background: #181b20;
+		border: 1px solid #282c35;
+		border-radius: 10px;
 		padding: 8px 12px;
-		min-width: 160px;
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+		width: 165px;
+		cursor: pointer;
+		box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+		transition: all 160ms cubic-bezier(0.16, 1, 0.3, 1);
+		z-index: 20;
+		user-select: none;
 	}
 
-	.badge-label {
-		font-size: 12px;
-		font-weight: 600;
-		color: var(--fg);
+	.callout-card.left {
+		left: 0;
+		transform: translateY(-50%);
+	}
+
+	.callout-card.right {
+		right: 0;
+		transform: translateY(-50%);
+	}
+
+	.callout-card:hover {
+		border-color: #40d180;
+		background: #20242a;
+		transform: translateY(-50%) scale(1.03);
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 12px rgba(64, 209, 128, 0.15);
+	}
+
+	.callout-card.selected {
+		border-color: #40d180;
+		background: rgba(64, 209, 128, 0.12);
+		box-shadow: 0 0 0 1px #40d180, 0 8px 24px rgba(0, 0, 0, 0.6);
+	}
+
+	.callout-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
 		margin-bottom: 4px;
-		white-space: nowrap;
 	}
 
-	.badge-action {
+	.callout-label {
 		font-size: 11px;
-		color: var(--muted);
+		font-weight: 600;
+		color: #e5e8ec;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		max-width: 220px;
 	}
 
-	.leader-line {
-		position: absolute;
-		left: 0;
-		top: 0;
-		width: 200px;
-		height: 100px;
-		pointer-events: none;
-		transform-origin: 0 0;
+	.edit-hint {
+		font-size: 9px;
+		color: #8d9098;
+		opacity: 0;
+		transition: opacity 120ms;
 	}
 
-	.leader-svg {
-		width: 100%;
-		height: 100%;
+	.callout-card:hover .edit-hint {
+		opacity: 1;
+		color: #40d180;
+	}
+
+	.callout-action-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 2px 7px;
+		border-radius: 6px;
+		background: rgba(255, 255, 255, 0.05);
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		max-width: 100%;
+	}
+
+	.callout-card.selected .callout-action-pill {
+		background: rgba(64, 209, 128, 0.18);
+		border-color: rgba(64, 209, 128, 0.35);
+	}
+
+	.pill-dot {
+		width: 5px;
+		height: 5px;
+		border-radius: 50%;
+		background: #40d180;
+		flex-shrink: 0;
+	}
+
+	.pill-text {
+		font-size: 10px;
+		font-weight: 500;
+		color: #40d180;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	/* Compact mode for side-by-side / dual view */
+	.mouse-stage.compact {
+		min-height: 420px;
+		padding: 10px 0;
+	}
+
+	.mouse-stage.compact .chassis-wrapper {
+		max-width: 380px;
+	}
+
+	.mouse-stage.compact .mouse-svg {
+		max-width: 320px;
+	}
+
+	.mouse-stage.compact .callout-card {
+		width: 120px;
+		padding: 5px 8px;
+	}
+
+	.mouse-stage.compact .callout-label {
+		font-size: 10px;
+	}
+
+	.mouse-stage.compact .edit-hint {
+		display: none;
+	}
+
+	.mouse-stage.compact .pill-text {
+		font-size: 9px;
 	}
 </style>

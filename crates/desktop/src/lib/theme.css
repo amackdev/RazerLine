@@ -74,3 +74,63 @@ button {
 	font-family: inherit;
 	color: inherit;
 }
+
+/* Button Utilities */
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	padding: 8px 16px;
+	font-size: 13px;
+	font-weight: 500;
+	border-radius: var(--radius-sm);
+	border: 1px solid var(--border);
+	background: #1a1c20;
+	color: var(--text);
+	cursor: pointer;
+	transition: background 150ms, border-color 150ms, color 150ms, box-shadow 150ms, transform 150ms;
+}
+
+.btn:hover {
+	border-color: var(--accent);
+	color: #fff;
+}
+
+.btn:active {
+	transform: scale(0.98);
+}
+
+.btn-primary {
+	background: var(--accent);
+	color: #0b0c0e;
+	border-color: var(--accent);
+	font-weight: 600;
+}
+
+.btn-primary:hover {
+	background: #4ae08d;
+	border-color: #4ae08d;
+	box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+.btn-ghost {
+	background: transparent;
+	border-color: var(--border);
+	color: var(--muted);
+}
+
+.btn-ghost:hover {
+	background: rgba(255, 255, 255, 0.05);
+	border-color: var(--border-strong);
+	color: var(--text);
+}
+
+.btn-sm {
+	padding: 5px 12px;
+	font-size: 11px;
+	border-radius: 6px;
+	letter-spacing: 0.3px;
+	text-transform: uppercase;
+	font-weight: 600;
+}

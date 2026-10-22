@@ -388,14 +388,20 @@ pub fn get_config(state: State<AppState>) -> Result<AppConfigInfo, String> {
 }
 
 #[tauri::command]
-pub fn set_start_with_windows(state: State<AppState>, enable: bool) -> Result<(), String> {
+pub fn set_start_with_windows(
+    app: tauri::AppHandle,
+    state: State<AppState>,
+    enable: bool,
+) -> Result<(), String> {
+    use tauri_plugin_autostart::ManagerExt;
     let mut cfg = state.config.lock().unwrap();
     cfg.start_with_windows = enable;
-    // Apply to autostart plugin
     if enable {
-        // Note: we can't easily get AppHandle here, so we just persist.
-        // The plugin state is synced on app startup in lib.rs.
+        let _ = app.autolaunch().enable();
+    } else {
+        let _ = app.autolaunch().disable();
     }
+    let _ = cfg.save();
     Ok(())
 }
 

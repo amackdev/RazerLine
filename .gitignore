@@ -2,5 +2,6 @@
 .DS_Store
 *.swp
 .wix/
-installer/
+installer/output/
 /MIGRATION_PROGRESS.md
+.claude/

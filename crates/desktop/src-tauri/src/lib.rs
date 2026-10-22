@@ -46,6 +46,12 @@ pub fn run() {
             // Initialize OSD overlay (Windows only)
             osd::init();
 
+            if let Some(window) = app.get_webview_window("main") {
+                if let Some(icon) = app.default_window_icon() {
+                    let _ = window.set_icon(icon.clone());
+                }
+            }
+
             app.manage(state.clone());
             worker::spawn(app.handle().clone(), state);
 

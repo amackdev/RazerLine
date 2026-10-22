@@ -11,7 +11,9 @@
 	</div>
 
 	<div class="right">
-		<BatteryBadge percent={battery.percent} charging={battery.charging} />
+		{#if device.info && device.info.has_battery && battery.percent !== null}
+			<BatteryBadge percent={battery.percent} charging={battery.charging} />
+		{/if}
 		{#if device.info}
 			<span class="device-name">{device.info.name}</span>
 		{:else if device.checked}

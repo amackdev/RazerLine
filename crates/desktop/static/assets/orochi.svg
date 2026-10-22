@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 700" width="500" height="700">
+  <defs>
+    <radialGradient id="or_glow" cx="50%" cy="55%" r="48%">
+      <stop offset="0%" stop-color="#40D180" stop-opacity="0.25" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="or_shell" x1="20%" y1="20%" x2="80%" y2="80%">
+      <stop offset="0%" stop-color="#2a2c32" />
+      <stop offset="50%" stop-color="#1d1e23" />
+      <stop offset="100%" stop-color="#111215" />
+    </linearGradient>
+  </defs>
+
+  <ellipse cx="250" cy="380" rx="165" ry="215" fill="url(#or_glow)" />
+
+  <!-- Compact Egg-Shaped Chassis -->
+  <path d="M 190,140 C 220,130 240,140 250,140 C 260,140 280,130 310,140 C 335,170 345,230 345,310 C 345,400 338,480 315,530 C 285,570 265,575 250,575 C 235,575 215,570 185,530 C 162,480 155,400 155,310 C 155,230 165,170 190,140 Z" 
+        fill="url(#or_shell)" stroke="#353842" stroke-width="1.8" />
+
+  <!-- Left Click -->
+  <path d="M 190,140 C 220,130 240,140 242,140 L 243,280 L 158,265 C 156,210 168,170 190,140 Z" fill="#222429" stroke="#3b3e48" stroke-width="1.2" />
+
+  <!-- Right Click -->
+  <path d="M 258,140 C 260,140 280,130 310,140 C 332,170 344,210 342,265 L 257,280 L 258,140 Z" fill="#222429" stroke="#3b3e48" stroke-width="1.2" />
+
+  <!-- Scroll Wheel -->
+  <rect x="240" y="150" width="20" height="60" rx="4" fill="#141518" stroke="#40D180" stroke-width="1.4" />
+  <line x1="240" y1="160" x2="260" y2="160" stroke="#484d5a" stroke-width="1.5" />
+  <line x1="240" y1="172" x2="260" y2="172" stroke="#484d5a" stroke-width="1.5" />
+  <line x1="240" y1="184" x2="260" y2="184" stroke="#484d5a" stroke-width="1.5" />
+  <line x1="240" y1="196" x2="260" y2="196" stroke="#484d5a" stroke-width="1.5" />
+
+  <!-- DPI Button -->
+  <rect x="242" y="225" width="16" height="16" rx="3" fill="#25272e" stroke="#3d404b" stroke-width="1" />
+
+  <!-- Side Buttons (M5 Forward, M4 Back) -->
+  <path d="M 155,295 L 163,295 L 163,330 L 154,330 Z" fill="#2b2d35" stroke="#454955" stroke-width="1.2" />
+  <path d="M 155,340 L 164,340 L 163,375 L 156,375 Z" fill="#2b2d35" stroke="#454955" stroke-width="1.2" />
+
+  <circle cx="250" cy="435" r="13" fill="none" stroke="#40D180" stroke-width="2" />
+  <circle cx="250" cy="435" r="3.5" fill="#40D180" />
+</svg>

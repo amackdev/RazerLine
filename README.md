@@ -126,15 +126,16 @@ cd RazerLine
 cargo build --release --workspace
 ```
 Compiled binaries and runtime DLLs will be output to `target\release\`:
-* `razer-hid-desktop.exe` (Desktop Application)
+* `razerline.exe` (Desktop Application)
 * `razer_hid_core.dll` (Engine Driver)
+* `razer_hid_protocol.dll` (Protocol Engine)
 * `razer_hid_devices_mice.dll` (Device Database)
 
 ### 3. Launch RazerLine
 ```powershell
-.\target\release\razer-hid-desktop.exe
+.\target\release\razerline.exe
 ```
-*(To launch directly to the system tray on startup: `.\target\release\razer-hid-desktop.exe --background`)*
+*(To launch directly to the system tray on startup: `.\target\release\razerline.exe --background`)*
 
 ---
 
@@ -149,14 +150,14 @@ RazerLine/
 │   ├── protocol/       (razer-hid-protocol)     USB HID report framing, argument packing, and XOR checksum calculation
 │   ├── core/           (razer-hid-core)         Hardware communication engine compiled to dynamic library (cdylib)
 │   ├── devices-mice/   (razer-hid-devices-mice) 95+ declarative Razer device profiles compiled to dynamic library (cdylib)
-│   ├── client/         (razer-hid-client)       Runtime dynamic DLL loader and safe abstractions over FFI
+│   ├── client/         (razer-hid-client)       Runtime dynamic DLL loader with built-in safe fallback
 │   └── desktop/        (razer-hid-desktop)      Tauri v2 + Svelte 5 desktop UI, Win32 low-level mouse hooks, OSD overlay, and tray daemon
 ├── assets/             (Branding & Icons)       High-res vector logo, application icons, and graphics
 └── Cargo.toml          (Workspace Manifest)     Root configuration and dependency specifications
 ```
 
 ### Dynamic Plugin Architecture
-`razer-hid-core` and `razer-hid-devices-mice` are compiled as runtime-loaded dynamic link libraries (`.dll`). The main application executable (`razer-hid-desktop.exe`) loads them dynamically upon startup. This architecture ensures:
+`razer-hid-core` and `razer-hid-devices-mice` can be compiled as runtime-loaded dynamic link libraries (`.dll`). The main application executable (`razerline.exe`) loads them dynamically upon startup, with built-in fallbacks if running standalone. This architecture ensures:
 1. **Extensibility:** The device catalog DLL can be updated independently without recompiling the main application.
 2. **Binary Isolation:** Memory boundaries are cleanly partitioned through a strict C-compatible FFI boundary (`razer_core_call`).
 
