@@ -7,6 +7,8 @@
 
 use std::sync::atomic::Ordering;
 
+use crate::config::AppConfig;
+use crate::profiles::{DeviceProfileConfig, UserProfile};
 use razer_hid_abi::DeviceProfile;
 use razer_hid_abi::commands::LedEffect;
 use razer_hid_client::RazerDevice;
@@ -346,4 +348,213 @@ pub fn set_matrix_spectrum(state: State<AppState>) -> Result<(), String> {
 #[tauri::command]
 pub fn set_matrix_wave(state: State<AppState>, direction: u8) -> Result<(), String> {
     with_device(&state, |dev| dev.set_matrix_wave(direction))
+}
+
+// -- Config / Profiles (Phase 4) ----------------------------------------------
+
+/// Serializable app config for the frontend.
+#[derive(Serialize)]
+pub struct AppConfigInfo {
+    pub start_with_windows: bool,
+    pub close_to_tray: bool,
+    pub start_minimized: bool,
+}
+
+impl From<&AppConfig> for AppConfigInfo {
+    fn from(cfg: &AppConfig) -> Self {
+        Self {
+            start_with_windows: cfg.start_with_windows,
+            close_to_tray: cfg.close_to_tray,
+            start_minimized: cfg.start_minimized,
+        }
+    }
+}
+
+/// Serializable profile summary for the frontend.
+#[derive(Serialize)]
+pub struct ProfileSummary {
+    pub id: String,
+    pub name: String,
+    pub is_active: bool,
+}
+
+#[tauri::command]
+pub fn get_config(state: State<AppState>) -> Result<AppConfigInfo, String> {
+    let cfg = state.config.lock().unwrap();
+    Ok(AppConfigInfo::from(&*cfg))
+}
+
+#[tauri::command]
+pub fn set_start_with_windows(state: State<AppState>, enable: bool) -> Result<(), String> {
+    let mut cfg = state.config.lock().unwrap();
+    cfg.start_with_windows = enable;
+    // Apply to autostart plugin
+    if enable {
+        // Note: we can't easily get AppHandle here, so we just persist.
+        // The plugin state is synced on app startup in lib.rs.
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_close_to_tray(state: State<AppState>, enable: bool) -> Result<(), String> {
+    let mut cfg = state.config.lock().unwrap();
+    cfg.close_to_tray = enable;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn save_config(state: State<AppState>) -> Result<(), String> {
+    let cfg = state.config.lock().unwrap();
+    cfg.save()
+}
+
+#[tauri::command]
+pub fn list_profiles(
+    state: State<AppState>,
+    product_id: u16,
+) -> Result<Vec<ProfileSummary>, String> {
+    let cfg = state.config.lock().unwrap();
+    let profile_cfg = cfg
+        .devices
+        .get(&product_id)
+        .ok_or_else(|| format!("no profiles for product id 0x{product_id:04x}"))?;
+    let active_id = &profile_cfg.active_profile_id;
+    Ok(profile_cfg
+        .profiles
+        .iter()
+        .map(|p| ProfileSummary {
+            id: p.id.clone(),
+            name: p.name.clone(),
+            is_active: &p.id == active_id,
+        })
+        .collect())
+}
+
+#[tauri::command]
+pub fn get_active_profile(state: State<AppState>, product_id: u16) -> Result<UserProfile, String> {
+    let cfg = state.config.lock().unwrap();
+    let profile_cfg = cfg
+        .devices
+        .get(&product_id)
+        .ok_or_else(|| format!("no profiles for product id 0x{product_id:04x}"))?;
+    Ok(profile_cfg.active_profile().clone())
+}
+
+#[tauri::command]
+pub fn set_active_profile(
+    state: State<AppState>,
+    product_id: u16,
+    profile_id: String,
+) -> Result<UserProfile, String> {
+    let mut cfg = state.config.lock().unwrap();
+    let profile_cfg = cfg
+        .devices
+        .entry(product_id)
+        .or_insert_with(|| DeviceProfileConfig::default_with_name("Unknown Device"));
+    if !profile_cfg.set_active_profile(&profile_id) {
+        return Err(format!("profile {profile_id} not found"));
+    }
+    let result = profile_cfg.active_profile().clone();
+    cfg.save()?;
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn create_profile(
+    state: State<AppState>,
+    product_id: u16,
+    name: String,
+) -> Result<UserProfile, String> {
+    let mut cfg = state.config.lock().unwrap();
+    let profile_cfg = cfg
+        .devices
+        .entry(product_id)
+        .or_insert_with(|| DeviceProfileConfig::default_with_name("Unknown Device"));
+    profile_cfg.create_profile(&name);
+    let result = profile_cfg.active_profile().clone();
+    cfg.save()?;
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn duplicate_profile(state: State<AppState>, product_id: u16) -> Result<UserProfile, String> {
+    let mut cfg = state.config.lock().unwrap();
+    let profile_cfg = cfg
+        .devices
+        .entry(product_id)
+        .or_insert_with(|| DeviceProfileConfig::default_with_name("Unknown Device"));
+    profile_cfg.duplicate_active();
+    let result = profile_cfg.active_profile().clone();
+    cfg.save()?;
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn delete_profile(
+    state: State<AppState>,
+    product_id: u16,
+    profile_id: String,
+) -> Result<Vec<ProfileSummary>, String> {
+    let mut cfg = state.config.lock().unwrap();
+    let profile_cfg = cfg
+        .devices
+        .entry(product_id)
+        .or_insert_with(|| DeviceProfileConfig::default_with_name("Unknown Device"));
+    if !profile_cfg.delete_profile(&profile_id) {
+        return Err("cannot delete the only remaining profile".to_string());
+    }
+    let active_id = profile_cfg.active_profile_id.clone();
+    let profiles = profile_cfg.profiles.clone();
+    cfg.save()?;
+    Ok(profiles
+        .iter()
+        .map(|p| ProfileSummary {
+            id: p.id.clone(),
+            name: p.name.clone(),
+            is_active: p.id == active_id,
+        })
+        .collect())
+}
+
+#[tauri::command]
+pub fn rename_profile(
+    state: State<AppState>,
+    product_id: u16,
+    profile_id: String,
+    new_name: String,
+) -> Result<UserProfile, String> {
+    let mut cfg = state.config.lock().unwrap();
+    let profile_cfg = cfg
+        .devices
+        .entry(product_id)
+        .or_insert_with(|| DeviceProfileConfig::default_with_name("Unknown Device"));
+    if !profile_cfg.rename_profile(&profile_id, &new_name) {
+        return Err(format!("profile {profile_id} not found"));
+    }
+    let result = profile_cfg.active_profile().clone();
+    cfg.save()?;
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn update_profile(
+    state: State<AppState>,
+    product_id: u16,
+    profile: UserProfile,
+) -> Result<UserProfile, String> {
+    let mut cfg = state.config.lock().unwrap();
+    let profile_cfg = cfg
+        .devices
+        .entry(product_id)
+        .or_insert_with(|| DeviceProfileConfig::default_with_name("Unknown Device"));
+
+    // Find and replace the profile
+    if let Some(idx) = profile_cfg.profiles.iter().position(|p| p.id == profile.id) {
+        profile_cfg.profiles[idx] = profile.clone();
+    } else {
+        return Err(format!("profile {} not found", profile.id));
+    }
+    cfg.save()?;
+    Ok(profile)
 }
