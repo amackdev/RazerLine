@@ -7,6 +7,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
+export interface LedZoneInfo {
+	id: number;
+	name: string;
+	has_brightness: boolean;
+}
+
 export interface DeviceInfo {
 	name: string;
 	vendor_id: number;
@@ -19,6 +25,10 @@ export interface DeviceInfo {
 	idle_min_seconds: number | null;
 	idle_max_seconds: number | null;
 	has_low_battery_threshold: boolean;
+	led_zones: LedZoneInfo[];
+	matrix_rows: number | null;
+	matrix_cols: number | null;
+	unsupported_led_effects: string[];
 }
 
 export const device: { info: DeviceInfo | null; checked: boolean } = $state({

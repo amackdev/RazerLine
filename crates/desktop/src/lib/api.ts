@@ -19,4 +19,28 @@ export const api = {
 
 	getFirmwareVersion: () => invoke<string>("get_firmware_version"),
 	getSerial: () => invoke<string>("get_serial"),
+
+	setLedOff: (zoneId: number) => invoke<void>("set_led_off", { zoneId }),
+	setLedStatic: (zoneId: number, rgb: [number, number, number]) =>
+		invoke<void>("set_led_static", { zoneId, rgb }),
+	setLedBreathing: (zoneId: number, rgb: [number, number, number]) =>
+		invoke<void>("set_led_breathing", { zoneId, rgb }),
+	setLedSpectrum: (zoneId: number) => invoke<void>("set_led_spectrum", { zoneId }),
+	setLedWave: (zoneId: number, direction: number) =>
+		invoke<void>("set_led_wave", { zoneId, direction }),
+	setLedBrightness: (zoneId: number, percent: number) =>
+		invoke<void>("set_led_brightness", { zoneId, percent }),
+
+	setLedOffAll: () => invoke<void>("set_led_off_all"),
+	setLedStaticAll: (rgb: [number, number, number]) =>
+		invoke<void>("set_led_static_all", { rgb }),
+	setLedBreathingAll: (rgb: [number, number, number]) =>
+		invoke<void>("set_led_breathing_all", { rgb }),
+	setLedSpectrumAll: () => invoke<void>("set_led_spectrum_all"),
+	setLedWaveAll: (direction: number) => invoke<void>("set_led_wave_all", { direction }),
+	setLedBrightnessAll: (percent: number) => invoke<void>("set_led_brightness_all", { percent }),
+
+	fillMatrix: (rgb: [number, number, number]) => invoke<void>("fill_matrix", { rgb }),
+	setMatrixSpectrum: () => invoke<void>("set_matrix_spectrum"),
+	setMatrixWave: (direction: number) => invoke<void>("set_matrix_wave", { direction }),
 };
