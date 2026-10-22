@@ -129,9 +129,9 @@
 			<div class="setting-row">
 				<div class="setting-info">
 					<span class="setting-label">Version</span>
-					<span class="setting-desc">RazerLine v0.1.0</span>
+					<span class="setting-desc">RazerLine v1.0.0</span>
 				</div>
-				<span class="setting-value">v0.1.0</span>
+				<span class="setting-value">v1.0.0</span>
 			</div>
 			<div class="setting-row">
 				<div class="setting-info">
