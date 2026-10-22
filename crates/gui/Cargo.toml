@@ -25,5 +25,12 @@ serde_json = "1.0"
 [target.'cfg(windows)'.dependencies]
 winreg = "0.56"
 
+# tray-icon's Linux/BSD backend is built on GTK 3 + AppIndicator and needs
+# `gtk::init()` called (and a GLib main loop pumping) before it can build a
+# menu — see `main.rs`'s `init_gtk_main_loop`. Not needed on Windows, where
+# tray-icon uses native win32 APIs directly.
+[target.'cfg(not(windows))'.dependencies]
+gtk = "0.18"
+
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1"

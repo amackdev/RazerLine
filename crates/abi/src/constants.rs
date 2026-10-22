@@ -20,6 +20,11 @@ pub const STATUS_NEW_COMMAND: u8 = 0x00;
 pub const STATUS_BUSY: u8 = 0x01;
 pub const STATUS_SUCCESSFUL: u8 = 0x02;
 pub const STATUS_FAILURE: u8 = 0x03;
+/// `RAZER_CMD_TIMEOUT` in OpenRazer's `razercommon.h` — "Command No
+/// Response / Command Timeout". Distinct from [`STATUS_FAILURE`]: the
+/// device never answered meaningfully in time, rather than actively
+/// rejecting the command.
+pub const STATUS_TIMEOUT: u8 = 0x04;
 pub const STATUS_NOT_SUPPORTED: u8 = 0x05;
 
 /// 0x1F is used by mice/mousemats; keyboards and some other classes use

@@ -1236,6 +1236,19 @@ impl Default for GuiApp {
 
 impl eframe::App for GuiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // tray-icon's Linux/BSD AppIndicator backend is built on GTK/GLib
+        // signals, which only fire if something actually iterates GTK's
+        // event queue. GTK enforces single-thread affinity (it must run
+        // on whichever thread called `gtk::init()` in `main.rs`), and
+        // that's this same thread — eframe's event loop and `main()` are
+        // never split across threads — so pumping it inline here, once
+        // per frame, is the only place this can safely happen. A no-op on
+        // Windows, where tray-icon doesn't use GTK at all.
+        #[cfg(not(windows))]
+        while gtk::events_pending() {
+            gtk::main_iteration();
+        }
+
         // Window close interception: if close_to_tray is true, hide to tray instead of quitting
         if ctx.input(|i| i.viewport().close_requested()) && self.config.close_to_tray {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);

@@ -21,12 +21,30 @@ mod tray;
 mod widgets;
 mod win_util;
 
+/// tray-icon's Linux/BSD backend (GTK 3 + AppIndicator) panics ("GTK has
+/// not been initialized") if a menu is built before `gtk::init()` runs.
+/// Must happen on whichever thread calls this (GTK enforces single-
+/// thread affinity — `gtk::main()`/`gtk::main_iteration()` later must run
+/// on this exact same thread, which is why `app.rs`'s `update()` pumps
+/// GTK's queue inline rather than spawning a separate thread for it). A
+/// no-op on Windows, where tray-icon talks to native win32 APIs directly
+/// and none of this is needed.
+#[cfg(not(windows))]
+fn init_gtk() {
+    gtk::init().expect("failed to initialize GTK (required by tray-icon's Linux/BSD backend)");
+}
+
+#[cfg(windows)]
+fn init_gtk() {}
+
 fn main() -> eframe::Result<()> {
     // Single instance enforcement: if an instance is already running,
     // bring it to the foreground and exit this duplicate process immediately.
     if !win_util::acquire_single_instance() {
         return Ok(());
     }
+
+    init_gtk();
 
     // Initialize DPI OSD overlay HUD
     osd::init();

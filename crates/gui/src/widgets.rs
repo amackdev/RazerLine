@@ -41,7 +41,7 @@ pub fn battery_badge(ui: &mut Ui, percent: u8, charging: bool) {
     } else {
         Color32::from_white_alpha(90)
     };
-    painter.rect_stroke(body, 2.0, egui::Stroke::new(1.2, outline_color));
+    painter.rect_stroke(body, 2.0, egui::Stroke::new(1.2_f32, outline_color));
     painter.rect_filled(nub, 1.0, outline_color);
 
     let fill_color = if percent <= 15 {

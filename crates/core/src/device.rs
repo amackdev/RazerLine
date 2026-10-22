@@ -26,6 +26,12 @@ pub enum DeviceError {
     #[error("command class=0x{class:02x} id=0x{id:02x} not supported by this firmware")]
     NotSupported { class: u8, id: u8 },
     #[error(
+        "class=0x{class:02x} id=0x{id:02x}: device timed out (RAZER_CMD_TIMEOUT) — it never \
+         answered this command after 5 attempts, as opposed to actively rejecting it; check \
+         this command's transaction id against the real source for this exact model"
+    )]
+    Timeout { class: u8, id: u8 },
+    #[error(
         "class=0x{class:02x} id=0x{id:02x}: device never confirmed this command after 5 \
          attempts (last response status=0x{status:02x}) — it may be accepted at the USB \
          level but not actually processed by the firmware for this command"
@@ -256,6 +262,10 @@ impl RazerDevice {
                     id: report.command_id,
                 },
                 STATUS_NOT_SUPPORTED => DeviceError::NotSupported {
+                    class: report.command_class,
+                    id: report.command_id,
+                },
+                STATUS_TIMEOUT => DeviceError::Timeout {
                     class: report.command_class,
                     id: report.command_id,
                 },

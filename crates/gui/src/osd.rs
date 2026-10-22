@@ -255,12 +255,6 @@ unsafe fn paint_osd(hwnd: win32::HWND) {
     win32::EndPaint(hwnd, &ps);
 }
 
-#[cfg(not(windows))]
-pub fn init() {}
-
-#[cfg(not(windows))]
-pub fn show_dpi(_dpi: u16) {}
-
 #[cfg(windows)]
 #[allow(non_snake_case, non_camel_case_types, clippy::upper_case_acronyms)]
 mod win32 {
