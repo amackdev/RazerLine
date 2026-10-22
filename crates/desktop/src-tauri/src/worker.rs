@@ -4,6 +4,10 @@
 //! push updates to the frontend via Tauri events instead of mutating
 //! `GuiApp` fields directly.
 //!
+//! Also owns the native Windows mouse hook (`input_hook.rs`) and processes
+//! hardware-triggered commands (DPI cycle, Sniper Clutch, profile cycle)
+//! by calling into the device client and emitting Tauri events.
+//!
 //! The hardware-button DPI-stage-cycling logic from the old
 //! `spawn_background_worker` isn't ported yet — it's driven by
 //! `UserProfile.dpi_stages`, which doesn't exist until the config/profile
@@ -20,6 +24,8 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
 use crate::commands::{self, DeviceInfo};
+#[cfg(windows)]
+use crate::input_hook::{self, HookCommand};
 use crate::state::AppState;
 
 const SCAN_INTERVAL: Duration = Duration::from_millis(1000);
@@ -41,11 +47,27 @@ pub fn spawn(app: AppHandle, state: AppState) {
 }
 
 fn run(app: AppHandle, state: AppState) {
+    // Start the native mouse hook (Windows only)
+    #[cfg(windows)]
+    let mut hook_manager = {
+        let mut mgr = input_hook::InputHookManager::new();
+        let cmd_rx = mgr.take_command_rx();
+        (mgr, cmd_rx)
+    };
+
     let mut last_scan = Instant::now() - SCAN_INTERVAL;
     let mut last_battery_poll = Instant::now() - BATTERY_POLL_INTERVAL;
     let mut last_dpi_poll = Instant::now() - DPI_POLL_INTERVAL;
 
     loop {
+        // Process hardware commands from the mouse hook
+        #[cfg(windows)]
+        if let Some((_, ref rx)) = hook_manager {
+            while let Ok(cmd) = rx.try_recv() {
+                process_hook_command(&app, &state, cmd);
+            }
+        }
+
         if last_scan.elapsed() >= SCAN_INTERVAL {
             last_scan = Instant::now();
             reconcile_connection(&app, &state);
@@ -62,6 +84,66 @@ fn run(app: AppHandle, state: AppState) {
         }
 
         thread::sleep(TICK);
+    }
+}
+
+#[cfg(windows)]
+fn process_hook_command(app: &AppHandle, state: &AppState, cmd: HookCommand) {
+    let guard = state.device.lock().unwrap();
+    let Some(dev) = guard.as_ref() else { return };
+
+    match cmd {
+        HookCommand::CycleDpi => {
+            if dev.profile.dpi.is_none() {
+                return;
+            }
+            let Ok(current) = dev.get_dpi() else { return };
+            let min = dev.profile.dpi.unwrap().min;
+            let max = dev.profile.dpi.unwrap().max;
+            let next = current.x.saturating_add(800).min(max).max(min);
+            let _ = dev.set_dpi(next, next);
+            state.current_dpi.store(next, Ordering::SeqCst);
+            let _ = app.emit("dpi-changed", next);
+        }
+        HookCommand::DpiUp => {
+            if dev.profile.dpi.is_none() {
+                return;
+            }
+            let Ok(current) = dev.get_dpi() else { return };
+            let max = dev.profile.dpi.unwrap().max;
+            let next = current.x.saturating_add(800).min(max);
+            let _ = dev.set_dpi(next, next);
+            state.current_dpi.store(next, Ordering::SeqCst);
+            let _ = app.emit("dpi-changed", next);
+        }
+        HookCommand::DpiDown => {
+            if dev.profile.dpi.is_none() {
+                return;
+            }
+            let Ok(current) = dev.get_dpi() else { return };
+            let min = dev.profile.dpi.unwrap().min;
+            let next = current.x.saturating_sub(800).max(min);
+            let _ = dev.set_dpi(next, next);
+            state.current_dpi.store(next, Ordering::SeqCst);
+            let _ = app.emit("dpi-changed", next);
+        }
+        HookCommand::SetClutchDpi(clutch_dpi) => {
+            if dev.profile.dpi.is_none() {
+                return;
+            }
+            let _ = dev.set_dpi(clutch_dpi, clutch_dpi);
+            state.current_dpi.store(clutch_dpi, Ordering::SeqCst);
+            let _ = app.emit("dpi-changed", clutch_dpi);
+        }
+        HookCommand::RestoreClutchDpi => {
+            // The UI will handle restoring the previous DPI via the profile system
+            // For now, just trigger a DPI poll to sync
+            poll_dpi(app, state);
+        }
+        HookCommand::CycleProfile => {
+            // Emit event for frontend to handle profile cycling
+            let _ = app.emit("profile-cycle", ());
+        }
     }
 }
 

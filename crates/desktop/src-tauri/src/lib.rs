@@ -7,6 +7,7 @@ mod autostart;
 mod buttons;
 mod commands;
 mod config;
+mod input_hook;
 mod profiles;
 mod state;
 mod worker;
