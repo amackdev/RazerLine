@@ -18,11 +18,15 @@ import SettingsCard from "../lib/components/SettingsCard.svelte";
 	import { device, refreshActiveDevice, startDeviceListeners } from "../lib/state/device.svelte";
 	import { refreshDpi, startDpiListeners } from "../lib/state/dpi.svelte";
 	import { startBatteryListeners } from "../lib/state/battery.svelte";
+	import { startProfileListeners } from "../lib/state/profiles.svelte";
+	import { startButtonMappingListeners } from "../lib/state/buttonMapping.svelte";
 
 	onMount(() => {
 		startDeviceListeners();
 		startDpiListeners();
 		startBatteryListeners();
+		startProfileListeners();
+		startButtonMappingListeners();
 		refreshActiveDevice();
 	});
 

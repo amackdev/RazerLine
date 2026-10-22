@@ -93,7 +93,7 @@
 			<MouseDiagram
 				src={svgSrc}
 				selectedButton={selectedButton}
-				mappings={$buttonMapping.mappings}
+				mappings={buttonMapping.mappings}
 				onSelect={handleSelect}
 				viewMode={activeTab}
 			/>
@@ -102,7 +102,7 @@
 		<!-- Right: Button Mapping Grid -->
 		<div class="grid-pane">
 			<ButtonMappingGrid
-				mappings={$buttonMapping.mappings}
+				mappings={buttonMapping.mappings}
 				selectedButton={selectedButton}
 				onSelect={handleSelect}
 				onUpdate={handleUpdateMapping}

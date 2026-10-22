@@ -471,10 +471,6 @@ mod windows_impl {
             _ => {}
         }
     }
-
-    // Public items for the crate
-    pub use self::HookCommand;
-    pub use self::InputHookManager;
 }
 
 // Public API available on all platforms

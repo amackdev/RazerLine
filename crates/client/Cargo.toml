@@ -9,5 +9,11 @@ description = "Loads razer-hid-core/-devices-mice as DLLs at runtime and exposes
 
 [dependencies]
 razer-hid-abi = { path = "../abi" }
+razer-hid-core = { path = "../core", optional = true }
+razer-hid-devices-mice = { path = "../devices-mice", optional = true }
 libloading.workspace = true
 thiserror.workspace = true
+
+[features]
+default = ["builtin"]
+builtin = ["dep:razer-hid-core", "dep:razer-hid-devices-mice"]

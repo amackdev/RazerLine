@@ -2,8 +2,8 @@
 // Listens for `profile-switched` events from the worker and provides
 // CRUD actions that wrap the Tauri commands.
 
-import { onMount } from "svelte";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 export interface ProfileSummary {
 	id: string;
@@ -160,17 +160,16 @@ export const profile = {
 	updateProfile,
 };
 
+let listenersStarted = false;
+
 // Start listening for profile-switched events
-onMount(() => {
-	let unlisten: (() => void) | null = null;
-	import("@tauri-apps/api/event").then(({ listen }) => {
-		listen("profile-switched", (event: any) => {
-			if (event.payload?.product_id === productId) {
-				refreshProfiles();
-			}
-		}).then((fn) => {
-			unlisten = fn;
-		});
+export function startProfileListeners() {
+	if (listenersStarted) return;
+	listenersStarted = true;
+
+	listen("profile-switched", (event: any) => {
+		if (event.payload?.product_id === productId) {
+			refreshProfiles();
+		}
 	});
-	return () => unlisten?.();
-});
+}

@@ -25,9 +25,12 @@ const DEVICES_PLUGIN: &str = "razer_hid_devices_mice";
 
 pub fn known_devices() -> &'static [DeviceProfile] {
     static CELL: std::sync::OnceLock<&'static [DeviceProfile]> = std::sync::OnceLock::new();
-    CELL.get_or_init(|| {
-        razer_hid_client::load_known_devices(DEVICES_PLUGIN)
-            .expect("couldn't load device catalog plugin")
+    CELL.get_or_init(|| match razer_hid_client::load_known_devices(DEVICES_PLUGIN) {
+        Ok(devices) => devices,
+        Err(e) => {
+            eprintln!("Warning: couldn't load device catalog plugin: {e}");
+            &[]
+        }
     })
 }
 

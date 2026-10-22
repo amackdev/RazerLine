@@ -2,8 +2,8 @@
 // Listens for `button-mappings-updated` events from the worker and provides
 // CRUD actions that wrap the Tauri commands.
 
-import { onMount } from "svelte";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 import type { ButtonAction, MouseButtonId } from "$lib/types/buttons";
 import { MouseButtonId as MB } from "$lib/types/buttons";
@@ -71,78 +71,37 @@ async function resetToDefaults() {
 	}
 }
 
-// Create a proper Svelte 5 store with subscribe method
-function createButtonMappingStore() {
-	type Store = {
-		mappings: Record<string, ButtonAction>;
-		loading: boolean;
-		productId: number | null;
-		loadMappings: (pid: number) => Promise<void>;
-		updateMapping: (button: MouseButtonId, action: ButtonAction) => Promise<void>;
-		resetToDefaults: () => Promise<void>;
-		getAction: (button: MouseButtonId) => ButtonAction;
-		subscribe: (callback: (value: Store) => void) => () => void;
-	};
+export const buttonMapping = {
+	get mappings() {
+		return mappings;
+	},
+	get loading() {
+		return loading;
+	},
+	get productId() {
+		return productId;
+	},
+	loadMappings,
+	updateMapping,
+	resetToDefaults,
+	getAction: (button: MouseButtonId) => mappings[button] ?? MB.defaultAction(button),
+	subscribe: (callback: (value: any) => void) => {
+		callback(buttonMapping);
+		return () => {};
+	},
+};
 
-	const store: Store = {
-		get mappings() {
-			return mappings;
-		},
-		get loading() {
-			return loading;
-		},
-		get productId() {
-			return productId;
-		},
-		loadMappings,
-		updateMapping,
-		resetToDefaults,
-		getAction: (button: MouseButtonId) => mappings[button] ?? MB.defaultAction(button),
-		
-		// Svelte store interface
-		subscribe: (callback: (value: Store) => void) => {
-			// Call immediately with current value
-			callback(store);
-			
-			// Use $effect to track changes
-			let prevMappings = JSON.stringify(mappings);
-			let prevLoading = loading;
-			let prevProductId = productId;
-			
-			$effect(() => {
-				const currMappings = JSON.stringify(mappings);
-				const currLoading = loading;
-				const currProductId = productId;
-				
-				if (currMappings !== prevMappings || currLoading !== prevLoading || currProductId !== prevProductId) {
-					prevMappings = currMappings;
-					prevLoading = currLoading;
-					prevProductId = currProductId;
-					callback(store);
-				}
-			});
-			
-			return () => {};
-		},
-	};
-	
-	return store;
-}
-
-export const buttonMapping = createButtonMappingStore();
+let listenersStarted = false;
 
 // Start listening for button-mappings-updated events
-onMount(() => {
-	let unlisten: (() => void) | null = null;
-	import("@tauri-apps/api/event").then(({ listen }) => {
-		listen("button-mappings-updated", (event: any) => {
-			const pid = event.payload?.product_id;
-			if (pid !== undefined && pid !== null) {
-				loadMappings(pid);
-			}
-		}).then((fn) => {
-			unlisten = fn;
-		});
+export function startButtonMappingListeners() {
+	if (listenersStarted) return;
+	listenersStarted = true;
+
+	listen("button-mappings-updated", (event: any) => {
+		const pid = event.payload?.product_id;
+		if (pid !== undefined && pid !== null) {
+			loadMappings(pid);
+		}
 	});
-	return () => unlisten?.();
-});
+}

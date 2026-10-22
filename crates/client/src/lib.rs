@@ -52,6 +52,23 @@ fn plugin_path(crate_name: &str) -> PathBuf {
         crate_name,
         std::env::consts::DLL_SUFFIX
     );
+
+    let candidates = [
+        plugin_dir().join(&file),
+        plugin_dir().join("..").join(&file),
+        PathBuf::from(&file),
+        PathBuf::from("target").join("release").join(&file),
+        PathBuf::from("target").join("debug").join(&file),
+        plugin_dir().join("..").join("..").join("target").join("release").join(&file),
+        plugin_dir().join("..").join("..").join("target").join("debug").join(&file),
+    ];
+
+    for candidate in candidates {
+        if candidate.is_file() {
+            return candidate;
+        }
+    }
+
     plugin_dir().join(file)
 }
 
@@ -60,6 +77,12 @@ fn load_library(crate_name: &str) -> Result<&'static Library, ClientError> {
     // borrows memory inside the loaded library, so it must never be
     // unloaded for the rest of the process's life.
     let path = plugin_path(crate_name);
+    if !path.is_file() {
+        return Err(ClientError::Load(
+            path.display().to_string(),
+            libloading::Error::DlOpenUnknown,
+        ));
+    }
     let lib = unsafe { Library::new(&path) }
         .map_err(|e| ClientError::Load(path.display().to_string(), e))?;
     Ok(Box::leak(Box::new(lib)))
@@ -92,19 +115,54 @@ struct CoreApi {
 fn core_api() -> Result<&'static CoreApi, ClientError> {
     static CELL: OnceLock<Result<CoreApi, ClientError>> = OnceLock::new();
     CELL.get_or_init(|| {
-        let lib = load_library("razer_hid_core")?;
-        unsafe {
-            Ok(CoreApi {
-                open: *symbol::<FnOpen>(lib, "razer_core_open")?,
-                close: *symbol::<FnClose>(lib, "razer_core_close")?,
-                last_error: *symbol::<FnLastError>(lib, "razer_core_last_error")?,
-                list_connected: *symbol::<FnListConnected>(lib, "razer_core_list_connected")?,
-                call: *symbol::<FnCall>(lib, "razer_core_call")?,
-                debug_list_interfaces: *symbol::<FnDebugListInterfaces>(
-                    lib,
-                    "razer_core_debug_list_interfaces",
-                )?,
-            })
+        if let Ok(lib) = load_library("razer_hid_core") {
+            unsafe {
+                if let (
+                    Ok(open),
+                    Ok(close),
+                    Ok(last_error),
+                    Ok(list_connected),
+                    Ok(call),
+                    Ok(debug_list_interfaces),
+                ) = (
+                    symbol::<FnOpen>(lib, "razer_core_open"),
+                    symbol::<FnClose>(lib, "razer_core_close"),
+                    symbol::<FnLastError>(lib, "razer_core_last_error"),
+                    symbol::<FnListConnected>(lib, "razer_core_list_connected"),
+                    symbol::<FnCall>(lib, "razer_core_call"),
+                    symbol::<FnDebugListInterfaces>(lib, "razer_core_debug_list_interfaces"),
+                ) {
+                    return Ok(CoreApi {
+                        open: *open,
+                        close: *close,
+                        last_error: *last_error,
+                        list_connected: *list_connected,
+                        call: *call,
+                        debug_list_interfaces: *debug_list_interfaces,
+                    });
+                }
+            }
+        }
+
+        #[cfg(feature = "builtin")]
+        {
+            return Ok(CoreApi {
+                open: razer_hid_core::ffi::razer_core_open,
+                close: razer_hid_core::ffi::razer_core_close,
+                last_error: razer_hid_core::ffi::razer_core_last_error,
+                list_connected: razer_hid_core::ffi::razer_core_list_connected,
+                call: razer_hid_core::ffi::razer_core_call,
+                debug_list_interfaces: razer_hid_core::ffi::razer_core_debug_list_interfaces,
+            });
+        }
+
+        #[cfg(not(feature = "builtin"))]
+        {
+            let path = plugin_path("razer_hid_core");
+            Err(ClientError::Load(
+                path.display().to_string(),
+                libloading::Error::DlOpenUnknown,
+            ))
         }
     })
     .as_ref()
@@ -123,11 +181,28 @@ fn last_error(api: &CoreApi) -> String {
 /// returns its catalog. Pass the crate's library name (e.g.
 /// `"razer_hid_devices_mice"`), not a file path.
 pub fn load_known_devices(crate_name: &str) -> Result<&'static [DeviceProfile], ClientError> {
-    let lib = load_library(crate_name)?;
-    let func: Symbol<FnPluginDevices> = unsafe { symbol(lib, "razer_hid_plugin_devices")? };
-    let mut len = 0usize;
-    let ptr = unsafe { func(&mut len) };
-    Ok(unsafe { std::slice::from_raw_parts(ptr, len) })
+    if let Ok(lib) = load_library(crate_name) {
+        if let Ok(func) = unsafe { symbol::<FnPluginDevices>(lib, "razer_hid_plugin_devices") } {
+            let mut len = 0usize;
+            let ptr = unsafe { func(&mut len) };
+            if !ptr.is_null() && len > 0 {
+                return Ok(unsafe { std::slice::from_raw_parts(ptr, len) });
+            }
+        }
+    }
+
+    #[cfg(feature = "builtin")]
+    {
+        if crate_name == "razer_hid_devices_mice" {
+            return Ok(razer_hid_devices_mice::KNOWN_DEVICES);
+        }
+    }
+
+    let path = plugin_path(crate_name);
+    Err(ClientError::Load(
+        path.display().to_string(),
+        libloading::Error::DlOpenUnknown,
+    ))
 }
 
 /// Enumerates which of `known_devices` are currently connected.

@@ -221,7 +221,6 @@ unsafe fn paint_osd(hwnd: win32::HWND) {
             0,
             0,
             0,
-            0,
             win32::FW_BOLD,
             0,
             0,
