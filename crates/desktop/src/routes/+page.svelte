@@ -3,15 +3,16 @@
 	import { fade, fly } from "svelte/transition";
 	import "../lib/theme.css";
 
-	import TopBar from "../lib/components/TopBar.svelte";
-	import TabBar from "../lib/components/TabBar.svelte";
-	import DpiCard from "../lib/components/DpiCard.svelte";
-	import PollRateCard from "../lib/components/PollRateCard.svelte";
-	import PowerCard from "../lib/components/PowerCard.svelte";
-	import InfoCard from "../lib/components/InfoCard.svelte";
-	import LightingCard from "../lib/components/LightingCard.svelte";
-	import MatrixCard from "../lib/components/MatrixCard.svelte";
-	import ProfilesCard from "../lib/components/ProfilesCard.svelte";
+import TopBar from "../lib/components/TopBar.svelte";
+import TabBar from "../lib/components/TabBar.svelte";
+import DpiCard from "../lib/components/DpiCard.svelte";
+import PollRateCard from "../lib/components/PollRateCard.svelte";
+import PowerCard from "../lib/components/PowerCard.svelte";
+import InfoCard from "../lib/components/InfoCard.svelte";
+import LightingCard from "../lib/components/LightingCard.svelte";
+import MatrixCard from "../lib/components/MatrixCard.svelte";
+import ProfilesCard from "../lib/components/ProfilesCard.svelte";
+import CustomizeCard from "../lib/components/CustomizeCard.svelte";
 
 	import { device, refreshActiveDevice, startDeviceListeners } from "../lib/state/device.svelte";
 	import { refreshDpi, startDpiListeners } from "../lib/state/dpi.svelte";
@@ -32,6 +33,7 @@
 		{ id: "performance", label: "PERFORMANCE" },
 		{ id: "lighting", label: "LIGHTING" },
 		{ id: "profiles", label: "PROFILES" },
+		{ id: "customize", label: "CUSTOMIZE" },
 	];
 	let activeTab = $state("performance");
 </script>
@@ -86,6 +88,8 @@
 						{/if}
 					{:else if activeTab === "profiles"}
 						<ProfilesCard delay={0} />
+					{:else if activeTab === "customize"}
+						<CustomizeCard delay={0} />
 					{/if}
 				</div>
 			{/key}
