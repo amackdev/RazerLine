@@ -136,5 +136,33 @@ pub const YOUR_DEVICE: DeviceProfile = DeviceProfile {
     //     },
     // }),
     battery: None,
+
+    // Wireless power-saving idle timer and low-battery warning threshold
+    // are each their *own* transaction-id grouping in
+    // `razermouse_driver.c` — do not assume either one matches
+    // `battery`'s group, or each other's. Grep
+    // `razer_attr_read_device_idle_time`/`razer_attr_read_charge_low_threshold`
+    // for your PID independently. See `IdleTimeProfile`/
+    // `LowBatteryThresholdProfile`'s doc comments for confirmed examples
+    // of devices where these diverge.
+    //
+    // idle_time: Some(IdleTimeProfile {
+    //     command_class: CommandClass::Misc as u8,
+    //     get_command_id: MiscCommand::GetIdleTime as u8,
+    //     set_command_id: MiscCommand::SetIdleTime as u8,
+    //     transaction_id: TRANSACTION_ID,
+    //     min_seconds: 60,
+    //     max_seconds: 900,
+    // }),
+    idle_time: None,
+
+    // low_battery_threshold: Some(LowBatteryThresholdProfile {
+    //     command_class: CommandClass::Misc as u8,
+    //     get_command_id: MiscCommand::GetLowBatteryThreshold as u8,
+    //     set_command_id: MiscCommand::SetLowBatteryThreshold as u8,
+    //     transaction_id: TRANSACTION_ID,
+    // }),
+    low_battery_threshold: None,
+
     unsupported_led_effects: &[],
 };

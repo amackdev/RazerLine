@@ -14,7 +14,7 @@ use razer_hid_abi::commands::{
 use razer_hid_abi::constants::RAZER_VENDOR_ID;
 use razer_hid_abi::{
     BatteryProfile, ChargingStatusSupport, Confidence, DeviceKind, DeviceProfile, DpiProfile,
-    IdentityProfile, LedZoneProfile, PollRateProfile,
+    IdentityProfile, IdleTimeProfile, LedZoneProfile, LowBatteryThresholdProfile, PollRateProfile,
 };
 
 pub const COBRA_PRO_WIRED: DeviceProfile = DeviceProfile {
@@ -72,6 +72,20 @@ pub const COBRA_PRO_WIRED: DeviceProfile = DeviceProfile {
         charging_status: ChargingStatusSupport::Supported {
             transaction_id: 0x1F,
         },
+    }),
+    idle_time: Some(IdleTimeProfile {
+        command_class: CommandClass::Misc as u8,
+        get_command_id: MiscCommand::GetIdleTime as u8,
+        set_command_id: MiscCommand::SetIdleTime as u8,
+        transaction_id: 0x1F,
+        min_seconds: 60,
+        max_seconds: 900,
+    }),
+    low_battery_threshold: Some(LowBatteryThresholdProfile {
+        command_class: CommandClass::Misc as u8,
+        get_command_id: MiscCommand::GetLowBatteryThreshold as u8,
+        set_command_id: MiscCommand::SetLowBatteryThreshold as u8,
+        transaction_id: 0xFF,
     }),
     unsupported_led_effects: &[],
 };

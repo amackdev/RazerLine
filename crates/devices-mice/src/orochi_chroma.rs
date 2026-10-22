@@ -8,10 +8,11 @@
 //! hardware by any maintainer of this repo** — if you own this device,
 //! please report what did/didn't work.
 
-use razer_hid_abi::commands::{CommandClass, GeneralCommand, MouseCommand};
+use razer_hid_abi::commands::{CommandClass, GeneralCommand, MiscCommand, MouseCommand};
 use razer_hid_abi::constants::RAZER_VENDOR_ID;
 use razer_hid_abi::{
-    Confidence, DeviceKind, DeviceProfile, DpiProfile, IdentityProfile, PollRateProfile,
+    Confidence, DeviceKind, DeviceProfile, DpiProfile, IdentityProfile, IdleTimeProfile,
+    LowBatteryThresholdProfile, PollRateProfile,
 };
 
 pub const OROCHI_CHROMA: DeviceProfile = DeviceProfile {
@@ -45,5 +46,19 @@ pub const OROCHI_CHROMA: DeviceProfile = DeviceProfile {
         serial_transaction_id: 0xFF,
     }),
     battery: None,
+    idle_time: Some(IdleTimeProfile {
+        command_class: CommandClass::Misc as u8,
+        get_command_id: MiscCommand::GetIdleTime as u8,
+        set_command_id: MiscCommand::SetIdleTime as u8,
+        transaction_id: 0xFF,
+        min_seconds: 60,
+        max_seconds: 900,
+    }),
+    low_battery_threshold: Some(LowBatteryThresholdProfile {
+        command_class: CommandClass::Misc as u8,
+        get_command_id: MiscCommand::GetLowBatteryThreshold as u8,
+        set_command_id: MiscCommand::SetLowBatteryThreshold as u8,
+        transaction_id: 0xFF,
+    }),
     unsupported_led_effects: &[],
 };

@@ -106,6 +106,8 @@ pub const BASILISK_V3: DeviceProfile = DeviceProfile {
         serial_transaction_id: TRANSACTION_ID,
     }),
     battery: None,
+    idle_time: None,
+    low_battery_threshold: None,
     unsupported_led_effects: &[
         razer_hid_abi::commands::LedEffect::Off,
         razer_hid_abi::commands::LedEffect::Breathing,

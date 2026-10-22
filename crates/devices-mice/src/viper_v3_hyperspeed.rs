@@ -12,7 +12,7 @@ use razer_hid_abi::commands::{CommandClass, GeneralCommand, MiscCommand, MouseCo
 use razer_hid_abi::constants::RAZER_VENDOR_ID;
 use razer_hid_abi::{
     BatteryProfile, ChargingStatusSupport, Confidence, DeviceKind, DeviceProfile, DpiProfile,
-    IdentityProfile, PollRateProfile,
+    IdentityProfile, IdleTimeProfile, LowBatteryThresholdProfile, PollRateProfile,
 };
 
 pub const VIPER_V3_HYPERSPEED: DeviceProfile = DeviceProfile {
@@ -51,6 +51,20 @@ pub const VIPER_V3_HYPERSPEED: DeviceProfile = DeviceProfile {
         get_charging_command_id: MiscCommand::GetChargingStatus as u8,
         transaction_id: 0x1F,
         charging_status: ChargingStatusSupport::NotApplicable,
+    }),
+    idle_time: Some(IdleTimeProfile {
+        command_class: CommandClass::Misc as u8,
+        get_command_id: MiscCommand::GetIdleTime as u8,
+        set_command_id: MiscCommand::SetIdleTime as u8,
+        transaction_id: 0x1F,
+        min_seconds: 60,
+        max_seconds: 900,
+    }),
+    low_battery_threshold: Some(LowBatteryThresholdProfile {
+        command_class: CommandClass::Misc as u8,
+        get_command_id: MiscCommand::GetLowBatteryThreshold as u8,
+        set_command_id: MiscCommand::SetLowBatteryThreshold as u8,
+        transaction_id: 0x1F,
     }),
     unsupported_led_effects: &[],
 };

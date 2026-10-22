@@ -15,5 +15,6 @@ pub use ffi_types::FfiInterfaceInfo;
 pub use op::Op;
 pub use profile::{
     BatteryProfile, ChargingStatusSupport, Confidence, DeviceKind, DeviceProfile, DpiProfile,
-    IdentityProfile, LedZoneProfile, MatrixPacketLength, MatrixProfile, PollRateProfile,
+    IdentityProfile, IdleTimeProfile, LedZoneProfile, LowBatteryThresholdProfile,
+    MatrixPacketLength, MatrixProfile, PollRateProfile,
 };

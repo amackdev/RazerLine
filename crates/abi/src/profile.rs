@@ -142,6 +142,48 @@ pub struct BatteryProfile {
     pub charging_status: ChargingStatusSupport,
 }
 
+/// Wireless power-saving: how long the device sits idle before it drops
+/// into its low-power sleep state. OpenRazer's own range (`clamp(60,
+/// 900)` in `razer_chroma_misc_set_idle_time`) is the hardware's actual
+/// limit, not an arbitrary daemon choice, so it's enforced here too.
+///
+/// This is a genuinely separate transaction-id grouping from
+/// [`BatteryProfile`] — cross-checking both switch statements in
+/// `razermouse_driver.c` for several models (e.g. the Basilisk V3 Pro,
+/// which is 0x1F for idle time but 0xFF for battery) turned up real
+/// differences, not just an assumption worth flagging. Always check this
+/// command on its own, not alongside battery.
+#[derive(Debug, Clone, Copy)]
+pub struct IdleTimeProfile {
+    pub command_class: u8,
+    pub get_command_id: u8,
+    pub set_command_id: u8,
+    pub transaction_id: u8,
+    pub min_seconds: u16,
+    pub max_seconds: u16,
+}
+
+/// Low-battery warning threshold: once charge drops below this percent,
+/// the device starts blinking its battery LED (hardware-side behavior,
+/// not something this crate implements). OpenRazer encodes the
+/// percentage as `floor(percent * 255 / 100)` on the wire, clamped to
+/// 0x0C..=0x3F (roughly 5%-25%) — the percent/byte conversion and clamp
+/// live in `razer-hid-core`'s `RazerDevice`, since that's where the HID
+/// round trip actually happens; this struct is pure data.
+///
+/// Also its own transaction-id grouping, distinct from both
+/// [`BatteryProfile`] and [`IdleTimeProfile`] — e.g. the Cobra
+/// HyperSpeed Wireless and Wired variants land in *different* groups for
+/// this command despite matching on every other command. Don't assume
+/// wired/wireless siblings share this.
+#[derive(Debug, Clone, Copy)]
+pub struct LowBatteryThresholdProfile {
+    pub command_class: u8,
+    pub get_command_id: u8,
+    pub set_command_id: u8,
+    pub transaction_id: u8,
+}
+
 /// Everything the control library needs to know about one device model.
 #[derive(Debug, Clone, Copy)]
 pub struct DeviceProfile {
@@ -161,6 +203,15 @@ pub struct DeviceProfile {
     /// `None` for wired-only devices with no onboard battery — only
     /// wireless/dock-chargeable models answer this command at all.
     pub battery: Option<BatteryProfile>,
+    /// Wireless power-saving idle timer. `None` for devices that don't
+    /// answer this command (not always the same set as [`battery`](Self::battery) —
+    /// see [`IdleTimeProfile`]'s doc comment).
+    pub idle_time: Option<IdleTimeProfile>,
+    /// Low-battery warning threshold. `None` for devices that don't
+    /// answer this command — see [`LowBatteryThresholdProfile`]'s doc
+    /// comment for why this doesn't always line up with [`battery`](Self::battery)
+    /// or [`idle_time`](Self::idle_time) either.
+    pub low_battery_threshold: Option<LowBatteryThresholdProfile>,
     /// Effects confirmed to be rejected outright for every zone/matrix on
     /// this device (e.g. Basilisk V3 rejects Breathing and Off). Lets the
     /// GUI hide those controls instead of surfacing a firmware error.

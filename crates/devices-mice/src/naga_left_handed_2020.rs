@@ -84,5 +84,7 @@ pub const NAGA_LEFT_HANDED_2020: DeviceProfile = DeviceProfile {
         serial_transaction_id: 0x1F,
     }),
     battery: None,
+    idle_time: None,
+    low_battery_threshold: None,
     unsupported_led_effects: &[],
 };

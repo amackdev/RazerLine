@@ -336,6 +336,13 @@ pub struct GuiApp {
     custom_dpi_input: u32,
     current_poll_hz: Option<u32>,
 
+    // Power settings (wireless only). Editing buffers for the "Power
+    // Management" card — populated from hardware on connect, pushed back
+    // to hardware when the user clicks Apply, so what's shown always
+    // starts as the device's actual current setting rather than a guess.
+    idle_time_minutes: u16,
+    low_battery_threshold_percent: u8,
+
     // Lighting
     selected_zone_idx: usize,
     sync_zones: bool,
@@ -384,6 +391,8 @@ impl GuiApp {
             dpi_y: 1600,
             custom_dpi_input: 1600,
             current_poll_hz: None,
+            idle_time_minutes: 10,
+            low_battery_threshold_percent: 15,
             selected_zone_idx: 0,
             sync_zones: true,
             led_color: [64, 209, 128],
@@ -404,6 +413,7 @@ impl GuiApp {
             crate::input_hook::update_active_mappings(prof.button_mappings.clone());
         }
         app.poll_battery();
+        app.poll_power_settings();
         app
     }
 
@@ -430,6 +440,29 @@ impl GuiApp {
         }
         if let Ok(charging) = dev.get_charging_status() {
             self.battery_charging = Some(charging);
+        }
+    }
+
+    /// Loads the current idle-timer/low-battery-threshold setting from
+    /// hardware into the Power Management card's edit buffers, so what's
+    /// shown reflects reality rather than whatever was shown for the
+    /// previously connected device. Leaves the previous value in place
+    /// on a failed read or when the device doesn't support a given
+    /// setting, same reasoning as [`poll_battery`](Self::poll_battery).
+    fn poll_power_settings(&mut self) {
+        let dev_guard = self.runtime_state.device.lock().unwrap();
+        let Some(dev) = dev_guard.as_ref() else {
+            return;
+        };
+        if dev.profile.idle_time.is_some() {
+            if let Ok(seconds) = dev.get_idle_time() {
+                self.idle_time_minutes = (seconds / 60).max(1);
+            }
+        }
+        if dev.profile.low_battery_threshold.is_some() {
+            if let Ok(percent) = dev.get_low_battery_threshold() {
+                self.low_battery_threshold_percent = percent;
+            }
         }
     }
 
@@ -513,6 +546,7 @@ impl GuiApp {
                 self.apply_user_profile(&active_prof, profile);
 
                 self.poll_battery();
+                self.poll_power_settings();
             }
             Err(e) => {
                 *self.runtime_state.device.lock().unwrap() = None;
@@ -2083,9 +2117,95 @@ impl GuiApp {
             });
         }
 
+        if profile.idle_time.is_some() || profile.low_battery_threshold.is_some() {
+            self.ui_power_card(ui, profile);
+        }
+
         if profile.identity.is_some() {
             self.ui_info_card(ui);
         }
+    }
+
+    fn ui_power_card(&mut self, ui: &mut egui::Ui, profile: &'static DeviceProfile) {
+        widgets::card(ui, "Power Management", |ui| {
+            if let Some(idle) = profile.idle_time {
+                let min_minutes = idle.min_seconds.div_ceil(60).max(1);
+                let max_minutes = idle.max_seconds / 60;
+
+                ui.label(
+                    egui::RichText::new("Wireless Power Saving")
+                        .strong()
+                        .color(Color32::WHITE),
+                );
+                ui.label(
+                    egui::RichText::new(format!(
+                        "Enter sleep mode if idle for this many minutes ({min_minutes}-{max_minutes})."
+                    ))
+                    .small()
+                    .color(theme::MUTED),
+                );
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::DragValue::new(&mut self.idle_time_minutes)
+                            .range(min_minutes..=max_minutes)
+                            .suffix(" min"),
+                    );
+                    if ui.button("Apply").clicked() {
+                        let minutes = self.idle_time_minutes;
+                        let r = {
+                            let dev_guard = self.runtime_state.device.lock().unwrap();
+                            dev_guard
+                                .as_ref()
+                                .map(|d| d.set_idle_time(minutes * 60))
+                                .unwrap_or_else(|| {
+                                    Err(razer_hid_client::ClientError::Device(
+                                        "no device connected".into(),
+                                    ))
+                                })
+                        };
+                        self.apply(r, &format!("Sleep after {minutes} min idle"));
+                    }
+                });
+                ui.add_space(12.0);
+            }
+
+            if profile.low_battery_threshold.is_some() {
+                ui.label(
+                    egui::RichText::new("Low Power Mode")
+                        .strong()
+                        .color(Color32::WHITE),
+                );
+                ui.label(
+                    egui::RichText::new(
+                        "Enter low power mode once battery drops below this percentage (5-25%).",
+                    )
+                    .small()
+                    .color(theme::MUTED),
+                );
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::DragValue::new(&mut self.low_battery_threshold_percent)
+                            .range(5..=25)
+                            .suffix("%"),
+                    );
+                    if ui.button("Apply").clicked() {
+                        let percent = self.low_battery_threshold_percent;
+                        let r = {
+                            let dev_guard = self.runtime_state.device.lock().unwrap();
+                            dev_guard
+                                .as_ref()
+                                .map(|d| d.set_low_battery_threshold(percent))
+                                .unwrap_or_else(|| {
+                                    Err(razer_hid_client::ClientError::Device(
+                                        "no device connected".into(),
+                                    ))
+                                })
+                        };
+                        self.apply(r, &format!("Low battery threshold set to {percent}%"));
+                    }
+                });
+            }
+        });
     }
 
     // ═════════════════════════════════════════════════════════════════════

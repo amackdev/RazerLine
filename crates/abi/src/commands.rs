@@ -35,14 +35,22 @@ pub enum MouseCommand {
     GetDpiXY = 0x85,
 }
 
-/// `razer_chroma_misc_get_battery_level`/`_get_charging_status` in
-/// OpenRazer's `razerchromacommon.c` — both take a 2-byte argument
-/// (unused/zeroed) and return their answer in `response.arguments[1]`:
-/// battery level as a raw 0-255 byte, charging status as 0/1.
+/// `razer_chroma_misc_*` in OpenRazer's `razerchromacommon.c`. Battery
+/// level/charging status take a 2-byte argument (unused/zeroed) and
+/// return their answer in `response.arguments[1]`: battery level as a
+/// raw 0-255 byte, charging status as 0/1. Idle time's *set* command
+/// takes a 2-byte big-endian seconds value and its *get* mirrors that
+/// back in `arguments[0..2]`; low-battery threshold's *set* takes a
+/// single raw byte (`floor(percent * 255 / 100)`, clamped 0x0C..=0x3F)
+/// and its *get* mirrors it back in `arguments[0]`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum MiscCommand {
+    SetLowBatteryThreshold = 0x01,
+    SetIdleTime = 0x03,
+    GetLowBatteryThreshold = 0x81,
     GetBatteryLevel = 0x80,
+    GetIdleTime = 0x83,
     GetChargingStatus = 0x84,
 }
 

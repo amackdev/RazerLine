@@ -822,4 +822,81 @@ impl RazerDevice {
         let resp = self.transact(&report)?;
         Ok(*resp.arguments.get(1).unwrap_or(&0) != 0)
     }
+
+    // -- Power settings (wireless power-saving) -------------------------------
+
+    /// Seconds of inactivity before the device drops into its low-power
+    /// sleep state.
+    pub fn get_idle_time(&self) -> Result<u16, DeviceError> {
+        let idle = self
+            .profile
+            .idle_time
+            .ok_or(DeviceError::Unsupported("idle time", self.profile.name))?;
+        let mut report = RazerReport::new(idle.command_class, idle.get_command_id, vec![0u8; 2])?;
+        report.transaction_id = idle.transaction_id;
+        let resp = self.transact(&report)?;
+        let hi = *resp.arguments.first().unwrap_or(&0);
+        let lo = *resp.arguments.get(1).unwrap_or(&0);
+        Ok(((hi as u16) << 8) | lo as u16)
+    }
+
+    /// Sets the idle timer. Clamped to 60-900 seconds — the hardware's
+    /// own limit (`clamp(idle_time, 60, 900)` in OpenRazer's
+    /// `razer_chroma_misc_set_idle_time`), not an arbitrary choice.
+    pub fn set_idle_time(&self, seconds: u16) -> Result<(), DeviceError> {
+        let idle = self
+            .profile
+            .idle_time
+            .ok_or(DeviceError::Unsupported("idle time", self.profile.name))?;
+        let seconds = seconds.clamp(idle.min_seconds, idle.max_seconds);
+        let args = vec![(seconds >> 8) as u8, (seconds & 0xFF) as u8];
+        let mut report = RazerReport::new(idle.command_class, idle.set_command_id, args)?;
+        report.transaction_id = idle.transaction_id;
+        self.transact(&report)?;
+        Ok(())
+    }
+
+    /// Battery percentage below which the device starts blinking its
+    /// battery LED as a low-charge warning.
+    pub fn get_low_battery_threshold(&self) -> Result<u8, DeviceError> {
+        let threshold = self
+            .profile
+            .low_battery_threshold
+            .ok_or(DeviceError::Unsupported(
+                "low battery threshold",
+                self.profile.name,
+            ))?;
+        let mut report = RazerReport::new(
+            threshold.command_class,
+            threshold.get_command_id,
+            vec![0u8; 1],
+        )?;
+        report.transaction_id = threshold.transaction_id;
+        let resp = self.transact(&report)?;
+        let raw = *resp.arguments.first().unwrap_or(&0);
+        Ok(((raw as u16 * 100 + 127) / 255) as u8)
+    }
+
+    /// Sets the low-battery warning threshold, as a percentage. Converted
+    /// to OpenRazer's on-wire byte (`floor(percent * 255 / 100)`) and
+    /// clamped to 0x0C..=0x3F (roughly 5%-25%) — same bounds
+    /// `razer_chroma_misc_set_low_battery_threshold` enforces, since
+    /// those reflect what the firmware actually accepts, not a policy
+    /// choice made here.
+    pub fn set_low_battery_threshold(&self, percent: u8) -> Result<(), DeviceError> {
+        let threshold = self
+            .profile
+            .low_battery_threshold
+            .ok_or(DeviceError::Unsupported(
+                "low battery threshold",
+                self.profile.name,
+            ))?;
+        let raw = (percent as u16 * 255 / 100) as u8;
+        let raw = raw.clamp(0x0C, 0x3F);
+        let mut report =
+            RazerReport::new(threshold.command_class, threshold.set_command_id, vec![raw])?;
+        report.transaction_id = threshold.transaction_id;
+        self.transact(&report)?;
+        Ok(())
+    }
 }

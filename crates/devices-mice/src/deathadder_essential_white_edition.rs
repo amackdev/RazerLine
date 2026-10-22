@@ -65,5 +65,7 @@ pub const DEATHADDER_ESSENTIAL_WHITE_EDITION: DeviceProfile = DeviceProfile {
         serial_transaction_id: 0xFF,
     }),
     battery: None,
+    idle_time: None,
+    low_battery_threshold: None,
     unsupported_led_effects: &[],
 };

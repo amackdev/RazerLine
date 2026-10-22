@@ -356,6 +356,25 @@ fn dispatch(
             let charging = dev.get_charging_status().map_err(|e| e.to_string())?;
             write_out(out_ptr, out_cap, &[charging as u8])
         }
+        Op::GetIdleTime => {
+            let seconds = dev.get_idle_time().map_err(|e| e.to_string())?;
+            write_out(out_ptr, out_cap, &seconds.to_le_bytes())
+        }
+        Op::SetIdleTime => {
+            let seconds = u16::from_le_bytes(input[0..2].try_into().unwrap());
+            dev.set_idle_time(seconds).map_err(|e| e.to_string())?;
+            Ok(0)
+        }
+        Op::GetLowBatteryThreshold => {
+            let percent = dev.get_low_battery_threshold().map_err(|e| e.to_string())?;
+            write_out(out_ptr, out_cap, &[percent])
+        }
+        Op::SetLowBatteryThreshold => {
+            let percent = input[0];
+            dev.set_low_battery_threshold(percent)
+                .map_err(|e| e.to_string())?;
+            Ok(0)
+        }
     }
 }
 
@@ -386,6 +405,10 @@ fn decode_op(raw: u32) -> Result<Op, String> {
         Op::GetSerial,
         Op::GetBatteryLevel,
         Op::GetChargingStatus,
+        Op::GetIdleTime,
+        Op::SetIdleTime,
+        Op::GetLowBatteryThreshold,
+        Op::SetLowBatteryThreshold,
     ];
     ALL.iter()
         .copied()

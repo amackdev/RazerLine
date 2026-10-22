@@ -62,4 +62,12 @@ pub enum Op {
     GetBatteryLevel = 24,
     /// in: none. out: charging:u8 (1 byte, 0 or 1).
     GetChargingStatus = 25,
+    /// in: none. out: seconds:u16 LE (2 bytes).
+    GetIdleTime = 26,
+    /// in: seconds:u16 LE (2 bytes). out: none.
+    SetIdleTime = 27,
+    /// in: none. out: percent:u8 (1 byte).
+    GetLowBatteryThreshold = 28,
+    /// in: percent:u8 (1 byte). out: none.
+    SetLowBatteryThreshold = 29,
 }

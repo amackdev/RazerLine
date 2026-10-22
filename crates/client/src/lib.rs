@@ -408,4 +408,29 @@ impl RazerDevice {
         let out = self.call(Op::GetChargingStatus, &[])?;
         Ok(out[0] != 0)
     }
+
+    /// Seconds of inactivity before the device sleeps. Only wireless
+    /// devices support this — see
+    /// [`DeviceProfile::idle_time`](razer_hid_abi::DeviceProfile::idle_time).
+    pub fn get_idle_time(&self) -> Result<u16, ClientError> {
+        let out = self.call(Op::GetIdleTime, &[])?;
+        Ok(u16::from_le_bytes(out[0..2].try_into().unwrap()))
+    }
+
+    pub fn set_idle_time(&self, seconds: u16) -> Result<(), ClientError> {
+        self.call(Op::SetIdleTime, &seconds.to_le_bytes())?;
+        Ok(())
+    }
+
+    /// Battery percentage below which the device starts blinking its
+    /// battery LED.
+    pub fn get_low_battery_threshold(&self) -> Result<u8, ClientError> {
+        let out = self.call(Op::GetLowBatteryThreshold, &[])?;
+        Ok(out[0])
+    }
+
+    pub fn set_low_battery_threshold(&self, percent: u8) -> Result<(), ClientError> {
+        self.call(Op::SetLowBatteryThreshold, &[percent])?;
+        Ok(())
+    }
 }

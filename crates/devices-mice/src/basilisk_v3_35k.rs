@@ -82,5 +82,7 @@ pub const BASILISK_V3_35K: DeviceProfile = DeviceProfile {
         transaction_id: 0x1F,
         charging_status: ChargingStatusSupport::Unsupported,
     }),
+    idle_time: None,
+    low_battery_threshold: None,
     unsupported_led_effects: &[],
 };
