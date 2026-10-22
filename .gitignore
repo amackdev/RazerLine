@@ -3,3 +3,4 @@
 *.swp
 .wix/
 installer/
+/MIGRATION_PROGRESS.md
