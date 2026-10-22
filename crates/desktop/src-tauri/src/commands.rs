@@ -8,6 +8,7 @@
 use std::sync::atomic::Ordering;
 
 use razer_hid_abi::DeviceProfile;
+use razer_hid_abi::commands::LedEffect;
 use razer_hid_client::RazerDevice;
 use serde::Serialize;
 use tauri::State;
@@ -28,11 +29,33 @@ pub fn known_devices() -> &'static [DeviceProfile] {
     })
 }
 
+/// Serializable summary of a `LedZoneProfile` for the frontend — just
+/// identity + whether it has a brightness control, not the command bytes.
+#[derive(Serialize, Clone)]
+pub struct LedZoneInfo {
+    pub id: u8,
+    pub name: &'static str,
+    pub has_brightness: bool,
+}
+
+/// Lowercase effect name matching `UserProfile.effect`'s string
+/// convention from the old egui GUI's config format — kept as a plain
+/// string rather than a shared enum since the frontend just needs to
+/// compare it against button labels, not round-trip it through Rust.
+fn effect_name(effect: LedEffect) -> &'static str {
+    match effect {
+        LedEffect::Off => "off",
+        LedEffect::Static => "static",
+        LedEffect::Breathing => "breathing",
+        LedEffect::Spectrum => "spectrum",
+        LedEffect::Wave => "wave",
+        LedEffect::Custom => "custom",
+    }
+}
+
 /// Serializable summary of a `DeviceProfile` for the frontend. Plain
 /// `DeviceProfile` can't cross the IPC boundary as-is (it derives
-/// `Clone`/`Copy`, not `Serialize`) — this only exposes what the
-/// Performance view (migration Phase 2) needs; Lighting (Phase 3) extends
-/// it with zone/matrix fields.
+/// `Clone`/`Copy`, not `Serialize`).
 #[derive(Serialize, Clone)]
 pub struct DeviceInfo {
     pub name: &'static str,
@@ -46,6 +69,10 @@ pub struct DeviceInfo {
     pub idle_min_seconds: Option<u16>,
     pub idle_max_seconds: Option<u16>,
     pub has_low_battery_threshold: bool,
+    pub led_zones: Vec<LedZoneInfo>,
+    pub matrix_rows: Option<u8>,
+    pub matrix_cols: Option<u8>,
+    pub unsupported_led_effects: Vec<&'static str>,
 }
 
 pub fn device_info(profile: &'static DeviceProfile) -> DeviceInfo {
@@ -64,7 +91,34 @@ pub fn device_info(profile: &'static DeviceProfile) -> DeviceInfo {
         idle_min_seconds: profile.idle_time.map(|i| i.min_seconds),
         idle_max_seconds: profile.idle_time.map(|i| i.max_seconds),
         has_low_battery_threshold: profile.low_battery_threshold.is_some(),
+        led_zones: profile
+            .leds
+            .iter()
+            .map(|z| LedZoneInfo {
+                id: z.id,
+                name: z.name,
+                has_brightness: z.brightness_command_id.is_some(),
+            })
+            .collect(),
+        matrix_rows: profile.matrix.map(|m| m.rows),
+        matrix_cols: profile.matrix.map(|m| m.cols),
+        unsupported_led_effects: profile
+            .unsupported_led_effects
+            .iter()
+            .map(|e| effect_name(*e))
+            .collect(),
     }
+}
+
+fn zone_by_id(
+    dev: &RazerDevice,
+    zone_id: u8,
+) -> Result<&'static razer_hid_abi::LedZoneProfile, String> {
+    dev.profile
+        .leds
+        .iter()
+        .find(|z| z.id == zone_id)
+        .ok_or_else(|| format!("no LED zone with id {zone_id} on this device"))
 }
 
 fn with_device<T>(
@@ -76,6 +130,22 @@ fn with_device<T>(
         .as_ref()
         .ok_or_else(|| "no device connected".to_string())?;
     f(dev).map_err(|e| e.to_string())
+}
+
+fn with_zone<T>(
+    state: &State<AppState>,
+    zone_id: u8,
+    f: impl FnOnce(
+        &RazerDevice,
+        &'static razer_hid_abi::LedZoneProfile,
+    ) -> Result<T, razer_hid_client::ClientError>,
+) -> Result<T, String> {
+    let guard = state.device.lock().unwrap();
+    let dev = guard
+        .as_ref()
+        .ok_or_else(|| "no device connected".to_string())?;
+    let zone = zone_by_id(dev, zone_id)?;
+    f(dev, zone).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -176,4 +246,104 @@ pub fn get_firmware_version(state: State<AppState>) -> Result<String, String> {
 #[tauri::command]
 pub fn get_serial(state: State<AppState>) -> Result<String, String> {
     with_device(&state, |dev| dev.get_serial())
+}
+
+// -- Lighting --------------------------------------------------------------
+
+#[tauri::command]
+pub fn set_led_off(state: State<AppState>, zone_id: u8) -> Result<(), String> {
+    with_zone(&state, zone_id, |dev, zone| dev.set_led_off(zone))
+}
+
+#[tauri::command]
+pub fn set_led_static(state: State<AppState>, zone_id: u8, rgb: [u8; 3]) -> Result<(), String> {
+    with_zone(&state, zone_id, |dev, zone| dev.set_led_static(zone, rgb))
+}
+
+#[tauri::command]
+pub fn set_led_breathing(state: State<AppState>, zone_id: u8, rgb: [u8; 3]) -> Result<(), String> {
+    with_zone(&state, zone_id, |dev, zone| {
+        dev.set_led_breathing(zone, rgb)
+    })
+}
+
+#[tauri::command]
+pub fn set_led_spectrum(state: State<AppState>, zone_id: u8) -> Result<(), String> {
+    with_zone(&state, zone_id, |dev, zone| dev.set_led_spectrum(zone))
+}
+
+#[tauri::command]
+pub fn set_led_wave(state: State<AppState>, zone_id: u8, direction: u8) -> Result<(), String> {
+    with_zone(&state, zone_id, |dev, zone| {
+        dev.set_led_wave(zone, direction)
+    })
+}
+
+#[tauri::command]
+pub fn set_led_brightness(state: State<AppState>, zone_id: u8, percent: u8) -> Result<(), String> {
+    with_zone(&state, zone_id, |dev, zone| {
+        dev.set_led_brightness(zone, percent)
+    })
+}
+
+#[tauri::command]
+pub fn set_led_off_all(state: State<AppState>) -> Result<(), String> {
+    with_device(&state, |dev| dev.set_led_off_all())
+}
+
+#[tauri::command]
+pub fn set_led_static_all(state: State<AppState>, rgb: [u8; 3]) -> Result<(), String> {
+    with_device(&state, |dev| dev.set_led_static_all(rgb))
+}
+
+#[tauri::command]
+pub fn set_led_breathing_all(state: State<AppState>, rgb: [u8; 3]) -> Result<(), String> {
+    with_device(&state, |dev| dev.set_led_breathing_all(rgb))
+}
+
+#[tauri::command]
+pub fn set_led_spectrum_all(state: State<AppState>) -> Result<(), String> {
+    with_device(&state, |dev| dev.set_led_spectrum_all())
+}
+
+#[tauri::command]
+pub fn set_led_wave_all(state: State<AppState>, direction: u8) -> Result<(), String> {
+    with_device(&state, |dev| dev.set_led_wave_all(direction))
+}
+
+#[tauri::command]
+pub fn set_led_brightness_all(state: State<AppState>, percent: u8) -> Result<(), String> {
+    with_device(&state, |dev| dev.set_led_brightness_all(percent))
+}
+
+// -- Matrix / underglow ------------------------------------------------------
+
+#[tauri::command]
+pub fn set_matrix_row(
+    state: State<AppState>,
+    row: u8,
+    start_col: u8,
+    colors: Vec<[u8; 3]>,
+) -> Result<(), String> {
+    with_device(&state, |dev| dev.set_matrix_row(row, start_col, &colors))
+}
+
+#[tauri::command]
+pub fn commit_matrix_frame(state: State<AppState>) -> Result<(), String> {
+    with_device(&state, |dev| dev.commit_matrix_frame())
+}
+
+#[tauri::command]
+pub fn fill_matrix(state: State<AppState>, rgb: [u8; 3]) -> Result<(), String> {
+    with_device(&state, |dev| dev.fill_matrix(rgb))
+}
+
+#[tauri::command]
+pub fn set_matrix_spectrum(state: State<AppState>) -> Result<(), String> {
+    with_device(&state, |dev| dev.set_matrix_spectrum())
+}
+
+#[tauri::command]
+pub fn set_matrix_wave(state: State<AppState>, direction: u8) -> Result<(), String> {
+    with_device(&state, |dev| dev.set_matrix_wave(direction))
 }

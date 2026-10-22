@@ -88,6 +88,23 @@ pub fn run() {
             commands::set_low_battery_threshold,
             commands::get_firmware_version,
             commands::get_serial,
+            commands::set_led_off,
+            commands::set_led_static,
+            commands::set_led_breathing,
+            commands::set_led_spectrum,
+            commands::set_led_wave,
+            commands::set_led_brightness,
+            commands::set_led_off_all,
+            commands::set_led_static_all,
+            commands::set_led_breathing_all,
+            commands::set_led_spectrum_all,
+            commands::set_led_wave_all,
+            commands::set_led_brightness_all,
+            commands::set_matrix_row,
+            commands::commit_matrix_frame,
+            commands::fill_matrix,
+            commands::set_matrix_spectrum,
+            commands::set_matrix_wave,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
