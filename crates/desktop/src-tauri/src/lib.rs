@@ -8,6 +8,7 @@ mod buttons;
 mod commands;
 mod config;
 mod input_hook;
+mod osd;
 mod profiles;
 mod state;
 mod worker;
@@ -41,6 +42,9 @@ pub fn run() {
             if autostart_enabled {
                 let _ = app.autolaunch().enable();
             }
+
+            // Initialize OSD overlay (Windows only)
+            osd::init();
 
             app.manage(state.clone());
             worker::spawn(app.handle().clone(), state);

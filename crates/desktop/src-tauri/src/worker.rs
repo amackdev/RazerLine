@@ -26,6 +26,7 @@ use tauri::{AppHandle, Emitter};
 use crate::commands::{self, DeviceInfo};
 #[cfg(windows)]
 use crate::input_hook::{self, HookCommand};
+use crate::osd;
 use crate::state::AppState;
 
 const SCAN_INTERVAL: Duration = Duration::from_millis(1000);
@@ -104,6 +105,7 @@ fn process_hook_command(app: &AppHandle, state: &AppState, cmd: HookCommand) {
             let _ = dev.set_dpi(next, next);
             state.current_dpi.store(next, Ordering::SeqCst);
             let _ = app.emit("dpi-changed", next);
+            osd::show_dpi(next);
         }
         HookCommand::DpiUp => {
             if dev.profile.dpi.is_none() {
@@ -115,6 +117,7 @@ fn process_hook_command(app: &AppHandle, state: &AppState, cmd: HookCommand) {
             let _ = dev.set_dpi(next, next);
             state.current_dpi.store(next, Ordering::SeqCst);
             let _ = app.emit("dpi-changed", next);
+            osd::show_dpi(next);
         }
         HookCommand::DpiDown => {
             if dev.profile.dpi.is_none() {
@@ -126,6 +129,7 @@ fn process_hook_command(app: &AppHandle, state: &AppState, cmd: HookCommand) {
             let _ = dev.set_dpi(next, next);
             state.current_dpi.store(next, Ordering::SeqCst);
             let _ = app.emit("dpi-changed", next);
+            osd::show_dpi(next);
         }
         HookCommand::SetClutchDpi(clutch_dpi) => {
             if dev.profile.dpi.is_none() {
@@ -134,6 +138,7 @@ fn process_hook_command(app: &AppHandle, state: &AppState, cmd: HookCommand) {
             let _ = dev.set_dpi(clutch_dpi, clutch_dpi);
             state.current_dpi.store(clutch_dpi, Ordering::SeqCst);
             let _ = app.emit("dpi-changed", clutch_dpi);
+            osd::show_dpi(clutch_dpi);
         }
         HookCommand::RestoreClutchDpi => {
             // The UI will handle restoring the previous DPI via the profile system
@@ -206,5 +211,6 @@ fn poll_dpi(app: &AppHandle, state: &AppState) {
     let previous = state.current_dpi.swap(x, Ordering::SeqCst);
     if previous != x {
         let _ = app.emit("dpi-changed", x);
+        osd::show_dpi(x);
     }
 }
